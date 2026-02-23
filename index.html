@@ -2,55 +2,65 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>都道府県クエスト</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>JAPAN QUEST</title>
   
-  <!-- React と ReactDOM の読み込み -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  
-  <!-- ブラウザ上でJSXを翻訳するBabelの読み込み -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-  <!-- Tailwind CSS の読み込み -->
   <script src="https://cdn.tailwindcss.com"></script>
   
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
-    body { margin: 0; padding: 0; overflow: hidden; background-color: black; }
+    @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap');
+    
+    body { 
+      margin: 0; padding: 0; overflow: hidden; background-color: black; 
+      user-select: none; touch-action: manipulation; -webkit-user-select: none;
+    }
     .font-dotgothic { font-family: 'DotGothic16', sans-serif; }
+    .font-pressstart { font-family: 'Press Start 2P', cursive; }
+    
     .pixel-window { 
-      border: 2px solid white; 
+      border: 3px solid white; 
       background-color: black; 
       color: white; 
-      border-radius: 4px;
-      box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
+      border-radius: 6px;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
     }
     @media (min-width: 640px) {
       .pixel-window { border-width: 4px; border-radius: 8px; }
     }
-    ::-webkit-scrollbar { width: 0px; background: transparent; }
+    ::-webkit-scrollbar { width: 4px; background: transparent; }
+    ::-webkit-scrollbar-thumb { background: white; border-radius: 4px; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
-  <!-- ここからReact（ゲーム）のコード -->
   <script type="text/babel">
     const { useState, useEffect, useCallback, Fragment } = React;
 
     // ==========================================
-    // オーディオエンジン (Web Audio APIによるピコピコ音合成)
+    // 1. オーディオエンジン
     // ==========================================
     let audioCtx = null;
     let bgmTimer = null;
+    let bgmMasterGain = null;
     let currentBGMType = null;
     let currentBGMStep = 0;
     let nextBGMTime = 0;
 
+    if (window.__jq_audioCtx) {
+      try { window.__jq_audioCtx.close(); } catch(e) {}
+    }
+    if (window.__jq_bgmTimer) {
+      clearTimeout(window.__jq_bgmTimer);
+    }
+
     const initAudio = () => {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        window.__jq_audioCtx = audioCtx;
       }
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -74,8 +84,14 @@
     const playSE = (type) => {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
-      
-      if (type === 'attack') {
+      if (type === 'cursor') {
+        playTone(880, 'square', 0.05, 0.05);
+      } else if (type === 'decide') {
+        setTimeout(() => playTone(880, 'square', 0.05, 0.05), 0);
+        setTimeout(() => playTone(1108, 'square', 0.05, 0.05), 100);
+      } else if (type === 'cancel') {
+        playTone(440, 'square', 0.1, 0.05);
+      } else if (type === 'attack') {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'square';
@@ -83,10 +99,8 @@
         osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
         gain.gain.setValueAtTime(0.2, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(now + 0.15);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(now + 0.15);
       } else if (type === 'correct') {
         setTimeout(() => playTone(523.25, 'square', 0.1, 0.1), 0);
         setTimeout(() => playTone(659.25, 'square', 0.1, 0.1), 100);
@@ -99,10 +113,8 @@
         gain.gain.setValueAtTime(0.2, now);
         gain.gain.setValueAtTime(0.2, now + 0.2);
         gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(now + 0.3);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(now + 0.3);
       } else if (type === 'encounter') {
         for(let i=0; i<4; i++) {
           setTimeout(() => playTone(880, 'square', 0.05, 0.1), i*100);
@@ -127,18 +139,15 @@
         osc.frequency.exponentialRampToValueAtTime(20, now + 0.05);
         gain.gain.setValueAtTime(0.05, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(now + 0.05);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(now + 0.05);
       }
     };
 
     const BGM_DATA = {
       title: [
         [392, 0.2], [392, 0.2], [392, 0.2], [523.25, 0.6], [392, 0.6], [523.25, 0.4], [587.33, 0.4], [659.25, 0.8],
-        [0, 0.2], [523.25, 0.2], [587.33, 0.2], [659.25, 0.2], [698.46, 0.4], [659.25, 0.4], [587.33, 0.4], [523.25, 0.4],
-        [587.33, 0.8], [0, 0.4]
+        [0, 0.2], [523.25, 0.2], [587.33, 0.2], [659.25, 0.2], [698.46, 0.4], [659.25, 0.4], [587.33, 0.4], [523.25, 0.4], [587.33, 0.8], [0, 0.4]
       ],
       field: [
         [261.63, 0.25], [329.63, 0.25], [392.00, 0.25], [329.63, 0.25],
@@ -156,23 +165,37 @@
 
     const stopBGM = () => {
       currentBGMType = null;
-      if (bgmTimer) { clearTimeout(bgmTimer); bgmTimer = null; }
+      if (bgmTimer) { 
+        clearTimeout(bgmTimer); 
+        bgmTimer = null; 
+      }
+      if (bgmMasterGain) {
+        try {
+          bgmMasterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+          bgmMasterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+          bgmMasterGain.disconnect();
+        } catch(e){}
+        bgmMasterGain = null;
+      }
     };
 
     const scheduleBGM = () => {
-      if (!currentBGMType || !audioCtx) return;
+      if (!currentBGMType || !audioCtx || !bgmMasterGain) return;
       while (nextBGMTime < audioCtx.currentTime + 0.1) {
         const melody = BGM_DATA[currentBGMType];
+        if (!melody) break;
         const [freq, duration] = melody[currentBGMStep];
         if (freq > 0) {
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
           osc.type = currentBGMType === 'battle' ? 'sawtooth' : 'square';
           osc.frequency.setValueAtTime(freq, nextBGMTime);
-          gain.gain.setValueAtTime(0.03, nextBGMTime);
+          gain.gain.setValueAtTime(0.04, nextBGMTime);
           gain.gain.exponentialRampToValueAtTime(0.001, nextBGMTime + duration * 0.9);
+          
           osc.connect(gain);
-          gain.connect(audioCtx.destination);
+          gain.connect(bgmMasterGain);
+          
           osc.start(nextBGMTime);
           osc.stop(nextBGMTime + duration);
         }
@@ -180,6 +203,7 @@
         currentBGMStep = (currentBGMStep + 1) % melody.length;
       }
       bgmTimer = setTimeout(scheduleBGM, 25);
+      window.__jq_bgmTimer = bgmTimer;
     };
 
     const playBGM = (type) => {
@@ -187,13 +211,138 @@
       stopBGM();
       currentBGMType = type;
       currentBGMStep = 0;
-      nextBGMTime = audioCtx.currentTime + 0.1;
+      nextBGMTime = audioCtx.currentTime + 0.05;
+      
+      bgmMasterGain = audioCtx.createGain();
+      bgmMasterGain.connect(audioCtx.destination);
       scheduleBGM();
     };
 
     // ==========================================
-    // ゲームデータ
+    // 2. タイトル画面コンポーネント (画像をSVGアートで完全再現)
     // ==========================================
+    function TitleScreen({ onNewGame, onLoadGame }) {
+      const [cursorY, setCursorY] = useState(0); 
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'w' || e.key === 's') {
+            playSE('cursor'); setCursorY(c => (c === 0 ? 1 : 0));
+          } else if (e.key === 'Enter' || e.key === ' ') {
+            playSE('decide');
+            if (cursorY === 0) onNewGame(); else onLoadGame();
+          }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [cursorY, onNewGame, onLoadGame]);
+
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-between pt-12 pb-8 sm:pt-16" style={{ backgroundColor: '#375280' }}>
+          
+          {/* 画像に全力で寄せたSVGロゴアート */}
+          <svg viewBox="0 0 800 300" className="w-full max-w-4xl mx-auto flex-shrink-0 drop-shadow-[0_15px_25px_rgba(0,0,0,0.6)]">
+            <defs>
+              {/* 光の強いグロー効果 */}
+              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="8" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            {/* 1. 立体的な JAPAN QUEST の文字 (一番奥のレイヤー) */}
+            <g transform="translate(420, 160) rotate(-6) scale(1, 1.25)">
+              {/* 何層も重ねて分厚い3Dブロック感を出す */}
+              <text x="-16" y="16" fontFamily="'Press Start 2P', cursive" fontSize="60" fill="#374151" textAnchor="middle">JAPAN QUEST</text>
+              <text x="-14" y="14" fontFamily="'Press Start 2P', cursive" fontSize="60" fill="#4b5563" textAnchor="middle">JAPAN QUEST</text>
+              <text x="-12" y="12" fontFamily="'Press Start 2P', cursive" fontSize="60" fill="#6b7280" textAnchor="middle">JAPAN QUEST</text>
+              <text x="-10" y="10" fontFamily="'Press Start 2P', cursive" fontSize="60" fill="#9ca3af" textAnchor="middle">JAPAN QUEST</text>
+              <text x="-8" y="8" fontFamily="'Press Start 2P', cursive" fontSize="60" fill="#d1d5db" textAnchor="middle">JAPAN QUEST</text>
+              <text x="-6" y="6" fontFamily="'Press Start 2P', cursive" fontSize="60" fill="#e5e7eb" textAnchor="middle">JAPAN QUEST</text>
+              <text x="-4" y="4" fontFamily="'Press Start 2P', cursive" fontSize="60" fill="#f3f4f6" textAnchor="middle">JAPAN QUEST</text>
+              <text x="-2" y="2" fontFamily="'Press Start 2P', cursive" fontSize="60" fill="#f9fafb" textAnchor="middle">JAPAN QUEST</text>
+              {/* 最前面の文字 */}
+              <text x="0" y="0" fontFamily="'Press Start 2P', cursive" fontSize="60" fill="#ffffff" textAnchor="middle">JAPAN QUEST</text>
+            </g>
+
+            {/* 2. 黒い日本列島シルエット (文字の手前、左側に配置) */}
+            <g transform="translate(160, 140) scale(1.8) rotate(-10)" fill="black" stroke="black" strokeWidth="1" strokeLinejoin="miter">
+              {/* 北海道 */}
+              <path d="M 50,-80 L 60,-85 L 70,-75 L 85,-75 L 90,-70 L 95,-50 L 80,-40 L 75,-30 L 60,-25 L 45,-30 L 35,-40 L 45,-50 L 40,-60 Z" />
+              {/* 本州 */}
+              <path d="M 40,-20 L 45,-10 L 35,0 L 25,10 L 10,15 L -5,25 L -20,25 L -30,35 L -45,45 L -60,50 L -75,50 L -85,60 L -95,70 L -105,75 L -95,85 L -85,85 L -75,75 L -60,65 L -40,60 L -25,55 L -10,45 L 0,35 L 15,25 L 25,15 L 40,0 Z" />
+              {/* 四国 */}
+              <path d="M -50,75 L -45,70 L -60,65 L -70,65 L -75,70 L -65,80 Z" />
+              {/* 九州 */}
+              <path d="M -80,85 L -75,95 L -90,105 L -95,115 L -105,115 L -115,100 L -105,90 Z" />
+              {/* 沖縄など */}
+              <circle cx="-135" cy="130" r="2" />
+              <circle cx="-145" cy="140" r="2" />
+            </g>
+
+            {/* 3. 剣と強烈な光 (文字の手前、右側に突き刺さるように配置) */}
+            <g transform="translate(680, 160) rotate(35)">
+              {/* 剣の影 */}
+              <polygon points="-10,0 -10,120 0,140 10,120 10,0" fill="rgba(0,0,0,0.3)" transform="translate(-15, 15)" />
+              {/* 剣の刃 左側 */}
+              <polygon points="-12,0 -12,120 0,150 0,0" fill="#f3f4f6" />
+              {/* 剣の刃 右側 */}
+              <polygon points="0,0 0,150 12,120 12,0" fill="#9ca3af" />
+              {/* 剣の鍔(つば) */}
+              <rect x="-35" y="-10" width="70" height="10" fill="#d1d5db" />
+              <rect x="-35" y="-15" width="70" height="5" fill="#6b7280" />
+              {/* 剣の柄 */}
+              <rect x="-8" y="-45" width="16" height="30" fill="#4b5563" />
+              {/* 剣の柄頭 */}
+              <circle cx="0" cy="-50" r="10" fill="#d1d5db" />
+            </g>
+
+            {/* 剣から放たれる強烈な光 (回転させず、真っ直ぐ放射させる) */}
+            <g transform="translate(680, 160)">
+              {/* 中心の発光 */}
+              <circle cx="0" cy="0" r="35" fill="#fef08a" filter="url(#glow)" opacity="0.9" />
+              <circle cx="0" cy="0" r="15" fill="#ffffff" filter="url(#glow)" />
+              
+              {/* 鋭い十字の光の筋 */}
+              <path d="M -3,-130 L 3,-130 L 6,-10 L 130,-3 L 130,3 L 6,10 L 3,130 L -3,130 L -6,10 L -130,3 L -130,-3 L -6,-10 Z" fill="#ffffff" filter="url(#glow)" />
+              {/* 斜めの光の筋 (黄色がかって少し短い) */}
+              <path d="M -2,-90 L 2,-90 L 5,-8 L 90,-2 L 90,2 L 5,8 L 2,90 L -2,90 L -5,8 L -90,2 L -90,-2 L -5,-8 Z" fill="#fef08a" transform="rotate(45)" opacity="0.9" filter="url(#glow)" />
+              
+              {/* 最前面の細くて鋭い白光 */}
+              <path d="M -1,-110 L 1,-110 L 2,-2 L 110,-1 L 110,1 L 2,2 L 1,110 L -1,110 L -2,2 L -110,1 L -110,-1 L -2,-2 Z" fill="#ffffff" />
+            </g>
+          </svg>
+          
+          <div className="flex flex-col items-center font-pressstart text-white text-sm sm:text-xl tracking-[0.15em] w-full flex-1 justify-center mt-8">
+            <div className="pixel-window p-8 flex flex-col gap-8 w-80">
+              <div className="relative cursor-pointer hover:text-yellow-400 transition-colors" 
+                   onMouseEnter={() => { if(cursorY !== 0){ playSE('cursor'); setCursorY(0); } }}
+                   onClick={() => { playSE('decide'); onNewGame(); }}>
+                <span className="absolute -left-8">{cursorY === 0 ? '▶' : ''}</span>START
+              </div>
+              <div className="relative cursor-pointer hover:text-yellow-400 transition-colors" 
+                   onMouseEnter={() => { if(cursorY !== 1){ playSE('cursor'); setCursorY(1); } }}
+                   onClick={() => { playSE('decide'); onLoadGame(); }}>
+                <span className="absolute -left-8">{cursorY === 1 ? '▶' : ''}</span>CONTINUE
+              </div>
+            </div>
+          </div>
+          <div className="font-pressstart text-[#c1cbe0] text-xs sm:text-sm tracking-[0.2em] mt-4 drop-shadow-md">
+            ©2026 JQ PROJECT
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 3. ゲームデータ と マップ・コンポーネント定義
+    // ==========================================
+    const TILE_SIZE = 32;
+
     const prefRawData = [
       [1, '北海道', 71, 3, [['道庁所在地は？','札幌市','函館市','旭川市','小樽市'],['世界自然遺産に登録されている半島は？','知床半島','積丹半島','根室半島','渡島半島'],['マリモが生息する有名な湖は？','阿寒湖','摩周湖','洞爺湖','屈斜路湖'],['北海道の先住民族は？','アイヌ','琉球民族','ウィルタ','ニヴフ'],['北海道が生産量日本一の野菜は？','じゃがいも','キャベツ','トマト','ナス'],['有名な冬のお祭りは？','さっぽろ雪まつり','かまくら祭','なまはげ','ねぶた祭']]],
       [2, '青森県', 66, 7, [['県庁所在地は？','青森市','弘前市','八戸市','むつ市'],['有名なお祭りは？','ねぶた祭','竿燈まつり','七夕まつり','花笠まつり'],['生産量日本一の果物は？','りんご','みかん','もも','ぶどう'],['世界自然遺産の山地は？','白神山地','八甲田山','恐山','岩木山'],['北海道と繋がるトンネルは？','青函トンネル','関門トンネル','津軽トンネル','アクアライン'],['有名なマグロの産地は？','大間','石巻','焼津','勝浦']]],
@@ -232,21 +381,28 @@
       [35, '山口県', 44, 25, [['県庁所在地は？','山口市','下関市','宇部市','周南市'],['毒を持つが高級魚として知られ、下関で水揚げされる魚は？','ふぐ','タイ','ヒラメ','アンコウ'],['日本最大級のカルスト台地・秋吉台の地下にある鍾乳洞は？','秋芳洞','龍泉洞','玉泉洞','あぶくま洞'],['岩国市にある木造の5連アーチ橋は？','錦帯橋','眼鏡橋','かずら橋','日本橋'],['幕末に松下村塾を開き、多くの志士を育てた人物は？','吉田松陰','坂本龍馬','西郷隆盛','高杉晋作'],['関門海峡に面した山口県最大の都市は？','下関市','山口市','宇部市','岩国市']]],
       [36, '徳島県', 49, 29, [['県庁所在地は？','徳島市','阿南市','鳴門市','吉野川市'],['「踊る阿呆に見る阿呆」の掛け声で有名な夏祭りは？','阿波おどり','よさこい祭り','ねぶた祭','祇園祭'],['鳴門海峡で発生する激しい潮流現象は？','鳴門の渦潮','関門の渦潮','津軽の渦潮','玄界灘の渦潮'],['徳島県特産の、香りが良く酸味が強い柑橘類は？','すだち','かぼす','ゆず','シークワーサー'],['弘法大師ゆかりの88の寺院を巡る巡礼を何という？','四国八十八ヶ所','西国三十三所','秩父三十四箇所','坂東三十三箇所'],['「四国三郎」の異名を持つ四国一の大河は？','吉野川','四万十川','仁淀川','物部川']]],
       [37, '香川県', 48, 28, [['県庁所在地は？','高松市','丸亀市','三豊市','観音寺市'],['消費量日本一で、別名「うどん県」と呼ばれる理由は？','うどん','そば','ラーメン','そうめん'],['オリーブの栽培で有名な瀬戸内海で2番目に大きな島は？','小豆島','淡路島','直島','大三島'],['香川県特産の、平和の象徴とされる植物は？','オリーブ','みかん','レモン','すだち'],['「こんぴらさん」の愛称で親しまれる長い石段のある神社は？','金刀比羅宮','厳島神社','出雲大社','伏見稲荷大社'],['丸亀市が全国シェアの多くを占める伝統工芸品は？','うちわ','扇子','和傘','提灯']]],
-      [38, '愛媛県', 47, 29, [['県庁所在地は？','松山市','今治市','新居浜市','西条市'],['生産量全国トップクラスの柑橘類は？','みかん','りんご','もも','ぶどう'],['夏目漱石の小説「坊っちゃん」の舞台となった温泉は？','道後温泉','有馬温泉','草津温泉','別府温泉'],['今治市が生産量日本一を誇る綿製品は？','タオル','デニム','シルク','帆布'],['広島県と愛媛県の島々を橋で結ぶ道路は？','しまなみ海道','瀬戸大橋','明石海峡大橋','アクアライン'],['小説「坊っちゃん」の作者は？','夏目漱石','森鴎外','芥川龍之介','太宰治']]],
+      [38, '愛媛県', 47, 29, [['県庁所在地は？','松山市','今治市','今治市','西条市'],['生産量全国トップクラスの柑橘類は？','みかん','りんご','もも','ぶどう'],['夏目漱石の小説「坊っちゃん」の舞台となった温泉は？','道後温泉','有馬温泉','草津温泉','別府温泉'],['今治市が生産量日本一を誇る綿製品は？','タオル','デニム','シルク','帆布'],['広島県と愛媛県の島々を橋で結ぶ道路は？','しまなみ海道','瀬戸大橋','明石海峡大橋','アクアライン'],['小説「坊っちゃん」の作者は？','夏目漱石','森鴎外','芥川龍之介','太宰治']]],
       [39, '高知県', 48, 30, [['県庁所在地は？','高知市','南国市','四万十市','香南市'],['幕末に薩長同盟の成立に尽力した土佐藩出身の人物は？','坂本龍馬','西郷隆盛','吉田松陰','木戸孝允'],['表面を火で炙って薬味と一緒に食べるカツオの郷土料理は？','カツオのたたき','マグロの解体ショー','鯛めし','ブリの照り焼き'],['「日本最後の清流」と呼ばれる川は？','四万十川','吉野川','仁淀川','長良川'],['鳴子を持って踊る夏のお祭りは？','よさこい祭り','阿波おどり','よさこいソーラン','エイサー'],['高知県が生産量日本一を誇る柑橘類は？','ゆず','すだち','かぼす','みかん']]],
       [40, '福岡県', 42, 28, [['県庁所在地は？','福岡市','北九州市','久留米市','飯塚市'],['スケトウダラの卵巣を唐辛子などで漬け込んだ特産品は？','明太子','筋子','数の子','キャビア'],['菅原道真を祀り、学問の神様として有名な神社は？','太宰府天満宮','北野天満宮','湯島天満宮','防府天満宮'],['豚骨スープと細いストレート麺が特徴のラーメンは？','博多ラーメン','札幌ラーメン','喜多方ラーメン','和歌山ラーメン'],['夜になると街中に並ぶ、食事を提供する移動式の店は？','屋台','キッチンカー','ドライブスルー','フードコート'],['ゴールデンウィークに開催される動員数日本一のお祭りは？','博多どんたく','博多祇園山笠','唐津くんち','長崎くんち']]],
       [41, '佐賀県', 41, 29, [['県庁所在地は？','佐賀市','唐津市','鳥栖市','伊万里市'],['弥生時代の環濠集落跡として有名な遺跡は？','吉野ヶ里遺跡','三内丸山遺跡','登呂遺跡','大森貝塚'],['伊万里焼とも呼ばれる、日本で初めて焼かれた磁器は？','有田焼','九谷焼','備前焼','信楽焼'],['有明海の干潟に生息し、泥の上を跳ねる魚は？','ムツゴロウ','ワラスボ','ハゼ','カレイ'],['県内で育てられる有名な黒毛和牛は？','佐賀牛','松阪牛','神戸牛','近江牛'],['呼子（よぶこ）町で有名な海産物は？','イカ','タコ','カニ','エビ']]],
       [42, '長崎県', 41, 30, [['県庁所在地は？','長崎市','佐世保市','諫早市','大村市'],['南蛮貿易で伝わった、卵と砂糖を使ったスポンジケーキは？','カステラ','バウムクーヘン','マカロン','エクレア'],['幕末に多くの西洋人が住んだ洋風建築が残る観光地は？','グラバー園','異人館街','横浜中華街','出島'],['オランダの街並みを再現した佐世保市のテーマパークは？','ハウステンボス','ディズニーランド','USJ','志摩スペイン村'],['原爆落下の中心地近くに建てられた平和を象徴する像は？','平和祈念像','自由の女神像','クラーク像','西郷隆盛像'],['豚骨・鶏ガラスープに太麺とたっぷりの具材を入れた麺料理は？','ちゃんぽん','ラーメン','うどん','パスタ']]],
       [43, '熊本県', 43, 29, [['県庁所在地は？','熊本市','八代市','天草市','玉名市'],['加藤清正が築いた、黒と白のコントラストが美しいお城は？','熊本城','大阪城','姫路城','名古屋城'],['世界最大級のカルデラを持つ活火山は？','阿蘇山','桜島','富士山','雲仙岳'],['赤いほっぺが特徴の熊本県の有名なPRキャラクターは？','くまモン','ひこにゃん','ふなっしー','せんとくん'],['熊本名物として知られる肉料理は？','馬刺し','牛タン','ジンギスカン','地鶏の炭火焼き'],['熊本県が生産量日本一を誇る夏の果実（野菜）は？','スイカ','メロン','いちご','マンゴー']]],
       [44, '大分県', 44, 28, [['県庁所在地は？','大分市','別府市','中津市','日田市'],['源泉数・湧出量ともに日本一の温泉都市は？','別府温泉','草津温泉','有馬温泉','下呂温泉'],['大分県が生産量日本一を誇る柑橘類は？','かぼす','すだち','ゆず','シークワーサー'],['鶏肉に衣をつけて揚げた大分県の郷土料理は？','とり天','唐揚げ','チキン南蛮','フライドチキン'],['由布岳の麓に広がる、女性に人気の温泉地は？','湯布院','黒川温泉','道後温泉','城崎温泉'],['様々な色の温泉を巡る別府の観光の定番は？','地獄めぐり','湯めぐり','外湯めぐり','砂湯めぐり']]],
-      [45, '宮崎県', 43, 30, [['県庁所在地は？','宮崎市','都城市','延岡市','日向市'],['揚げた鶏肉に甘酢とタルタルソースをかけた料理は？','チキン南蛮','とり天','唐揚げ','油淋鶏'],['「太陽のタマゴ」などのブランドで知られる南国の果物は？','マンゴー','パイナップル','バナナ','パパイヤ'],['阿蘇の火山活動でできた渓谷で、ボート下りが有名なのは？','高千穂峡','耶馬渓','瀞峡','黒部峡谷'],['サンメッセ日南にある、イースター島公認の石像は？','モアイ像','スフィンクス','マーライオン','自由の女神像'],['宮崎県原産の、黄色くてさっぱりした甘さの柑橘類は？','日向夏','みかん','いよかん','デコポン']]],
+      [45, '宮崎県', 43, 30, [['県庁所在地は？','宮崎市','都城市','延岡市','日向市'],['揚げた鶏肉に甘酢とタルタルソースをかけた料理は？','チキン南蛮','とり天','唐揚げ','油淋鶏'],['「太陽のタマゴ」などのブランドで知られる南国の果物的存在は？','マンゴー','パイナップル','バナナ','パパイヤ'],['阿蘇の火山活動でできた渓谷で、ボート下りが有名なのは？','高千穂峡','耶馬渓','瀞峡','黒部峡谷'],['サンメッセ日南にある、イースター島公認の石像は？','モアイ像','スフィンクス','マーライオン','自由の女神像'],['宮崎県原産の、黄色くてさっぱりした甘さの柑橘類は？','日向夏','みかん','いよかん','デコポン']]],
       [46, '鹿児島県', 42, 31, [['県庁所在地は？','鹿児島市','霧島市','鹿屋市','薩摩川内市'],['鹿児島湾（錦江湾）に浮かぶ、現在も活動を続ける活火山は？','桜島','阿蘇山','雲仙岳','浅間山'],['鹿児島特産の、六白と呼ばれる豚の品種は？','黒豚','イベリコ豚','アグー豚','金華豚'],['明治維新の立役者で、上野公園に銅像がある人物は？','西郷隆盛','大久保利通','坂本龍馬','木戸孝允'],['別名「唐芋（からいも）」とも呼ばれる特産のイモ類は？','さつまいも','じゃがいも','さといも','やまいも'],['樹齢数千年の縄文杉がある世界自然遺産の島は？','屋久島','種子島','奄美大島','徳之島']]],
       [47, '沖縄県', 9, 36, [['県庁所在地は？','那覇市','沖縄市','うるま市','浦添市'],['琉球王国の政治・外交・文化の中心だった世界遺産のお城は？','首里城','中城城','今帰仁城','座喜味城'],['苦味のある野菜と豆腐、豚肉などを炒めた郷土料理は？','ゴーヤチャンプルー','ラフテー','ソーキそば','海ぶどう'],['家の屋根などに置かれる、魔除けの獅子の像は？','シーサー','狛犬','シャチホコ','シーラカンス'],['巨大なジンベエザメが泳ぐ大水槽で有名な水族館は？','美ら海水族館','海遊館','八景島シーパラダイス','鳥羽水族館'],['かつて沖縄に存在した独立国家は？','琉球王国','大和朝廷','蝦夷島政府','邪馬台国']]]
     ];
 
     const prefecturesData = prefRawData.map(d => ({
-      id: d[0], name: d[1], x: d[2], y: d[3],
-      quizzes: d[4].map(q => ({ text: q[0], correct: q[1], options: [q[1], q[2], q[3], q[4]].sort(() => 0.5 - Math.random()) }))
+      id: d[0],
+      name: d[1],
+      x: d[2],
+      y: d[3],
+      quizzes: d[4].map(q => ({
+        text: q[0],
+        correct: q[1],
+        options: [...q.slice(1)].sort(() => Math.random() - 0.5)
+      }))
     }));
 
     const mapLayout = [
@@ -287,256 +443,110 @@
       "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~=.~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
       "~~~~~~~~~..=..=..=..=..=..=..=..=..=..=..~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
       "~~~~~~~~*..~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-      "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+      "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
     ];
-    const TILE_SIZE = 40; 
+
+    const Tile = ({ type }) => {
+      let bgColor = "bg-green-400"; 
+      if (type === '~') bgColor = "bg-blue-600"; 
+      if (type === '^') bgColor = "bg-gray-400"; 
+      if (type === '*') bgColor = "bg-green-600"; 
+      if (type === '=') bgColor = "bg-yellow-600"; 
+      return <div className={`w-full h-full ${bgColor} border-[0.5px] border-black/10`} />;
+    };
+
+    const CastleIcon = () => <div className="text-xl sm:text-2xl drop-shadow-md pb-1 pointer-events-none">🏰</div>;
+    const FlagIcon = () => <div className="text-xl sm:text-2xl drop-shadow-md pb-1 pointer-events-none">🚩</div>;
+    const HeroIcon = () => <div className="text-2xl sm:text-3xl drop-shadow-md pb-1 z-10 animate-bounce pointer-events-none">🚶</div>;
 
     // ==========================================
-    // ドット絵風アイコンSVG
+    // 4. バトル画面コンポーネント
     // ==========================================
-    const HeroIcon = () => (
-      <svg viewBox="0 0 16 16" className="w-4/5 h-4/5 drop-shadow-md">
-        <rect x="5" y="2" width="6" height="4" fill="#fbbf24" />
-        <rect x="6" y="4" width="4" height="4" fill="#fca5a5" />
-        <rect x="5" y="8" width="6" height="5" fill="#3b82f6" />
-        <rect x="4" y="9" width="2" height="3" fill="#fca5a5" />
-        <rect x="10" y="9" width="2" height="3" fill="#fca5a5" />
-        <rect x="5" y="13" width="2" height="3" fill="#9ca3af" />
-        <rect x="9" y="13" width="2" height="3" fill="#9ca3af" />
-        <rect x="11" y="6" width="1" height="8" fill="#d1d5db" />
-        <rect x="10" y="10" width="3" height="1" fill="#fbbf24" />
-        <rect x="7" y="5" width="1" height="1" fill="#000" />
-        <rect x="9" y="5" width="1" height="1" fill="#000" />
-      </svg>
-    );
-    const CastleIcon = () => (
-      <svg viewBox="0 0 16 16" className="w-4/5 h-4/5 drop-shadow-md animate-bounce">
-        <rect x="2" y="6" width="12" height="10" fill="#e5e7eb" />
-        <rect x="1" y="4" width="4" height="4" fill="#9ca3af" />
-        <rect x="6" y="2" width="4" height="4" fill="#9ca3af" />
-        <rect x="11" y="4" width="4" height="4" fill="#9ca3af" />
-        <rect x="6" y="12" width="4" height="4" fill="#1f2937" />
-        <rect x="3" y="8" width="2" height="2" fill="#3b82f6" />
-        <rect x="11" y="8" width="2" height="2" fill="#3b82f6" />
-      </svg>
-    );
-    const FlagIcon = () => (
-      <svg viewBox="0 0 16 16" className="w-3/4 h-3/4 drop-shadow-md opacity-60">
-        <rect x="4" y="2" width="2" height="14" fill="#9ca3af" />
-        <path d="M6 2 L14 5 L6 8 Z" fill="#ef4444" />
-      </svg>
-    );
-
-    // ==========================================
-    // コンポーネント群
-    // ==========================================
-    function TitleScreen({ onStart }) {
-      return (
-        <div className="flex flex-col items-center justify-center w-full h-full space-y-8 p-4">
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold text-center leading-tight tracking-widest text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">
-            都道府県<br/>クエスト
-          </h1>
-          <button onClick={onStart} className="pixel-window px-6 py-3 sm:px-8 sm:py-4 text-xl sm:text-2xl hover:bg-white hover:text-black transition-colors animate-pulse">
-            ぼうけん に でる
-          </button>
-          <div className="text-gray-400 mt-4 text-center text-sm sm:text-lg leading-loose">
-            十字キー または 画面のボタン で いどう<br/>
-            47とどうふけん を すべて せいは しよう！
-          </div>
-        </div>
-      );
-    }
-
-    function Tile({ type }) {
-      if (type === '~') return <div className="w-full h-full bg-[#1e3a8a]"></div>;
-      if (type === '.') return <div className="w-full h-full bg-[#4ade80] border-t border-l border-[#86efac] opacity-90"></div>;
-      if (type === '*') return (
-        <div className="w-full h-full bg-[#4ade80] flex justify-center items-center">
-          <svg viewBox="0 0 16 16" className="w-3/4 h-3/4"><path d="M8 2 L14 8 L10 8 L14 14 L2 14 L6 8 L2 8 Z" fill="#166534" /></svg>
-        </div>
-      );
-      if (type === '^') return (
-        <div className="w-full h-full bg-[#4ade80] flex justify-center items-center">
-           <svg viewBox="0 0 16 16" className="w-full h-full">
-            <path d="M8 2 L15 14 L1 14 Z" fill="#854d0e" /><path d="M8 2 L11 7 L8 6 L5 7 Z" fill="#fef08a" />
-          </svg>
-        </div>
-      );
-      if (type === '=') return (
-        <div className="w-full h-full bg-[#1e3a8a] flex justify-center items-center">
-          <div className="w-3/5 h-3/5 bg-[#8b5a2b] rounded-sm border border-[#5c3a21]"></div>
-        </div>
-      );
-      return null;
-    }
-
-    function FieldScreen({ playerPos, clearedPrefs, onMove }) {
-      return (
-        <div className="w-full h-full relative bg-[#1e3a8a] overflow-hidden">
-          <div className="absolute left-1/2 top-1/2 transition-transform duration-200"
-               style={{ transform: `translate(calc(-50% - ${playerPos.x * TILE_SIZE}px), calc(-50% - ${playerPos.y * TILE_SIZE}px))` }}>
-            
-            {mapLayout.map((row, y) => row.split('').map((tile, x) => {
-              const pref = prefecturesData.find(p => p.x === x && p.y === y);
-              return (
-                <div key={`${x}-${y}`} className="absolute" style={{ left: x * TILE_SIZE, top: y * TILE_SIZE, width: TILE_SIZE, height: TILE_SIZE }}>
-                  <Tile type={tile} />
-                  {pref && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      {clearedPrefs.includes(pref.id) ? <FlagIcon /> : <CastleIcon />}
-                    </div>
-                  )}
-                </div>
-              );
-            }))}
-            <div className="absolute flex items-center justify-center z-10" 
-                 style={{ left: playerPos.x * TILE_SIZE, top: playerPos.y * TILE_SIZE, width: TILE_SIZE, height: TILE_SIZE }}><HeroIcon /></div>
-          </div>
-
-          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 pixel-window p-2 sm:p-3 z-20 text-sm sm:text-xl">
-            せいは: {clearedPrefs.length} / 47
-          </div>
-
-          <div className="absolute bottom-4 right-4 sm:bottom-8 sm:right-8 grid grid-cols-3 gap-1 sm:gap-2 opacity-80 z-20">
-            <div /><button className="pixel-window w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center text-xl sm:text-2xl active:bg-gray-500" onClick={() => onMove(0, -1)}>▲</button><div />
-            <button className="pixel-window w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center text-xl sm:text-2xl active:bg-gray-500" onClick={() => onMove(-1, 0)}>◀</button>
-            <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center bg-gray-900 border border-gray-700 rounded-full"></div>
-            <button className="pixel-window w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center text-xl sm:text-2xl active:bg-gray-500" onClick={() => onMove(1, 0)}>▶</button>
-            <div /><button className="pixel-window w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center text-xl sm:text-2xl active:bg-gray-500" onClick={() => onMove(0, 1)}>▼</button><div />
-          </div>
-        </div>
-      );
-    }
-
-    function EncounterDialog({ pref, onYes, onNo }) {
-      return (
-        <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="pixel-window p-4 sm:p-6 w-full max-w-sm sm:max-w-md flex flex-col gap-4 sm:gap-6 animate-pulse border-4 border-yellow-400">
-            <p className="text-lg sm:text-2xl leading-relaxed text-center">
-              {pref.name} に とうちゃくした！<br/>クイズに ちょうせん しますか？
-            </p>
-            <div className="flex justify-center sm:justify-end gap-4 mt-2 sm:mt-4 text-base sm:text-xl">
-              <button className="pixel-window px-4 py-2 sm:px-6 sm:py-3 hover:bg-white hover:text-black w-24" onClick={() => { playSE('attack'); onYes(); }}>はい</button>
-              <button className="pixel-window px-4 py-2 sm:px-6 sm:py-3 hover:bg-white hover:text-black w-24" onClick={() => { playSE('step'); onNo(); }}>いいえ</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    function BattleScreen({ pref, onWin, onLose }) {
+    function BattleScreen({ pref, onWin, onLose, heroName }) {
       const [quizzes, setQuizzes] = useState([]);
-      const [quizIndex, setQuizIndex] = useState(0); 
-      const [enemyHp, setEnemyHp] = useState(3);
-      const [playerHp, setPlayerHp] = useState(3);
-      
+      const [qIdx, setQIdx] = useState(0); 
+      const [eHp, setEHp] = useState(3);
+      const [pHp, setPHp] = useState(3);
       const [phase, setPhase] = useState('APPEAR'); 
-      const [messages, setMessages] = useState([]);
-      const [msgIndex, setMsgIndex] = useState(0);
+      const [msgs, setMsgs] = useState([]);
+      const [mIdx, setMIdx] = useState(0);
 
       useEffect(() => {
-        const shuffled = [...pref.quizzes].sort(() => 0.5 - Math.random());
-        setQuizzes(shuffled);
-        setMessages([`あ！ やせいの\n${pref.name} が あらわれた！`]);
-        setMsgIndex(0);
+        setQuizzes([...pref.quizzes].sort(() => 0.5 - Math.random()));
+        setMsgs([`あ！ やせいの\n${pref.name} が あらわれた！`]);
+        setMIdx(0); 
         setPhase('APPEAR');
       }, [pref]);
 
-      const handleMessageClick = () => {
-        if (phase === 'SELECTING' || quizzes.length === 0) return; 
+      const goNext = () => {
+        const nextQ = quizzes[qIdx % quizzes.length];
+        setPhase('QUESTION'); 
+        setMsgs([`${pref.name} の こうげき！`, nextQ.text]); 
+        setMIdx(0);
+      };
 
-        if (msgIndex < messages.length - 1) {
-          setMsgIndex(msgIndex + 1);
+      const handleClick = () => {
+        if (phase === 'SELECTING' || quizzes.length === 0) return;
+        playSE('cursor');
+        if (mIdx < msgs.length - 1) { 
+          setMIdx(mIdx + 1); 
         } else {
-          if (phase === 'APPEAR') {
-            startNextQuestion(0, quizzes);
-          } else if (phase === 'QUESTION') {
-            setPhase('SELECTING');
-          } else if (phase === 'RESULT') {
-            if (enemyHp <= 0) {
-              stopBGM();
-              playSE('win');
-              setPhase('WIN');
-              setMessages([`${pref.name} を たおした！`, `ゆうしゃ は\n${pref.name} の ちしき を えた！`]);
-              setMsgIndex(0);
-            } else if (playerHp <= 0) {
-              stopBGM();
-              playSE('wrong');
-              setPhase('LOSE');
-              setMessages([`ゆうしゃ は しんでしまった...`, `もういちど べんきょうして こよう。`]);
-              setMsgIndex(0);
-            } else {
-              startNextQuestion(quizIndex, quizzes);
-            }
-          } else if (phase === 'WIN') {
-            onWin(pref.id);
-          } else if (phase === 'LOSE') {
-            onLose();
-          }
+          if (phase === 'APPEAR') { goNext(); }
+          else if (phase === 'QUESTION') { setPhase('SELECTING'); }
+          else if (phase === 'RESULT') {
+            if (eHp <= 0) {
+              stopBGM(); playSE('win'); setPhase('WIN');
+              setMsgs([`${pref.name} を たおした！`, `ゆうしゃ は\n${pref.name} の ちしき を えた！`]); setMIdx(0);
+            } else if (pHp <= 0) {
+              stopBGM(); playSE('wrong'); setPhase('LOSE');
+              setMsgs([`ゆうしゃ は しんでしまった...`, `もういちど べんきょうして こよう。`]); setMIdx(0);
+            } else { goNext(); }
+          } 
+          else if (phase === 'WIN') { onWin(pref.id); } 
+          else if (phase === 'LOSE') { onLose(); }
         }
       };
 
-      const startNextQuestion = (index, currentQuizzes) => {
-        const safeIndex = index % currentQuizzes.length;
-        const q = currentQuizzes[safeIndex];
-        setPhase('QUESTION');
-        setMessages([`${pref.name} の こうげき！`, q.text]);
-        setMsgIndex(0);
-      };
-
-      const handleOptionClick = (selected) => {
-        const safeIndex = quizIndex % quizzes.length;
-        const q = quizzes[safeIndex];
-        
-        if (selected === q.correct) {
-          playSE('attack');
-          setTimeout(() => playSE('correct'), 200);
-          setEnemyHp(h => h - 1);
-          setMessages(["ゆうしゃ の こうげき！", "せいかい だ！", `${pref.name} に 1 の ダメージ！`]);
+      const selectOpt = (opt) => {
+        const q = quizzes[qIdx % quizzes.length];
+        if (opt === q.correct) {
+          playSE('attack'); setTimeout(() => playSE('correct'), 200);
+          setEHp(h => h - 1); 
+          setMsgs(["ゆうしゃ の こうげき！", "せいかい だ！", `${pref.name} に 1 の ダメージ！`]);
         } else {
           playSE('wrong');
-          setPlayerHp(h => h - 1);
-          setMessages(["ゆうしゃ は まちがえた！", "ミス！", `ゆうしゃ は 1 の ダメージを うけた！\n(せいかい: ${q.correct})`]);
+          setPHp(h => h - 1); 
+          setMsgs(["ゆうしゃ は まちがえた！", "ミス！", `ゆうしゃ は 1 の ダメージを うけた！\n(せいかい: ${q.correct})`]);
         }
-        setPhase('RESULT');
-        setMsgIndex(0);
-        setQuizIndex(i => i + 1);
+        setPhase('RESULT'); setMIdx(0); setQIdx(i => i + 1);
       };
 
-      const renderText = (text) => text.split('\n').map((line, i) => <Fragment key={i}>{line}<br /></Fragment>);
-      const toFullWidth = (num) => String(num).replace(/[0-9]/g, s => String.fromCharCode(s.charCodeAt(0) + 0xFEE0));
-      const currentSafeIndex = quizIndex % quizzes.length;
+      const full = (n) => String(n).replace(/[0-9]/g, s => String.fromCharCode(s.charCodeAt(0) + 0xFEE0));
 
       return (
-        <div className="w-full h-full flex flex-col p-2 sm:p-4 bg-black relative overflow-hidden" onClick={handleMessageClick}>
-          <div className="flex justify-between items-start gap-2 sm:gap-4 mb-2 sm:mb-4 text-xs sm:text-lg">
-            <div className="pixel-window p-2 sm:p-4 flex-1">
-              ゆうしゃ<br/>ＨＰ： {toFullWidth(playerHp)}<br/>（あと {playerHp} ミス）
+        <div className="w-full h-full flex flex-col p-2 sm:p-4 bg-black relative z-50 text-white" onClick={handleClick}>
+          <div className="flex justify-between gap-4 mb-4 text-sm sm:text-xl">
+            <div className="pixel-window p-3 flex-1 leading-relaxed text-left">
+              ゆうしゃ<br/>ＨＰ： {full(pHp)}<br/>（あと {pHp} ミス）
             </div>
-            <div className="pixel-window p-2 sm:p-4 flex-1 text-right">
-              {pref.name}<br/>ＨＰ： {toFullWidth(enemyHp)}<br/>（あと {enemyHp} 問）
+            <div className="pixel-window p-3 flex-1 leading-relaxed text-right">
+              {pref.name}<br/>ＨＰ： {full(eHp)}<br/>（あと {eHp} 問）
             </div>
           </div>
-
-          <div className="flex-1 flex items-center justify-center min-h-[100px]">
-            <div className={`text-4xl sm:text-6xl md:text-8xl font-bold tracking-widest bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-400 drop-shadow-[0_0_15px_rgba(255,255,255,0.5)] text-center
-                ${phase === 'RESULT' && messages[1] === 'せいかい だ！' ? 'animate-ping' : ''}
-                ${phase === 'APPEAR' ? 'animate-bounce' : ''} `}>
+          <div className="flex-1 flex items-center justify-center">
+            <div className={`text-5xl sm:text-8xl font-bold tracking-widest bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-400 drop-shadow-[0_0_15px_rgba(255,255,255,0.5)] text-center ${phase==='RESULT'&&msgs[1]==='せいかい だ！'?'animate-ping':''} ${phase==='APPEAR'?'animate-bounce':''}`}>
               {pref.name}
             </div>
           </div>
-
-          <div className="h-2/5 sm:h-1/3 min-h-[160px] max-h-[250px] flex flex-col sm:flex-row gap-2 sm:gap-4 mt-2">
-            <div className="flex-1 pixel-window p-3 sm:p-6 relative text-base sm:text-2xl leading-relaxed cursor-pointer overflow-y-auto">
-              {messages[msgIndex] && renderText(messages[msgIndex])}
-              {phase !== 'SELECTING' && <div className="absolute bottom-2 right-3 sm:bottom-4 sm:right-5 animate-pulse text-lg sm:text-2xl">▼</div>}
+          <div className="h-1/3 min-h-[160px] flex flex-col sm:flex-row gap-4 mt-2">
+            <div className="flex-1 pixel-window p-4 sm:p-6 relative text-lg sm:text-2xl leading-relaxed cursor-pointer overflow-y-auto">
+              {msgs[mIdx] ? msgs[mIdx].split('\n').map((l,i) => <Fragment key={i}>{l}<br/></Fragment>) : null}
+              {phase !== 'SELECTING' && <div className="absolute bottom-2 right-4 animate-pulse">▼</div>}
             </div>
-
             {phase === 'SELECTING' && quizzes.length > 0 && (
-              <div className="w-full sm:w-2/5 h-full pixel-window p-2 sm:p-4 flex flex-col gap-1 sm:gap-2 overflow-y-auto">
-                {quizzes[currentSafeIndex]?.options.map((opt, i) => (
-                  <button key={i} className="text-left p-1 sm:p-2 hover:bg-white hover:text-black rounded text-sm sm:text-xl transition-colors flex-1"
-                    onClick={(e) => { e.stopPropagation(); handleOptionClick(opt); }}>
+              <div className="w-full sm:w-2/5 pixel-window p-3 flex flex-col gap-2 overflow-y-auto">
+                {quizzes[qIdx % quizzes.length].options.map((opt, i) => (
+                  <button key={i} className="text-left p-2 hover:bg-white hover:text-black rounded text-base sm:text-xl transition-colors" onClick={(e) => { e.stopPropagation(); selectOpt(opt); }}>
                     ▶ {opt}
                   </button>
                 ))}
@@ -547,47 +557,86 @@
       );
     }
 
-    function GameClearScreen() {
-      return (
-        <div className="flex flex-col items-center justify-center w-full h-full space-y-8 bg-black p-4">
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-bold text-center leading-tight text-yellow-400 animate-bounce">
-            おめでとう！<br/>にほん ぜんこく せいは！
-          </h1>
-          <div className="text-base sm:text-2xl text-white text-center leading-loose pixel-window p-4 sm:p-8">
-            ゆうしゃ は 47とどうふけん の<br/>すべての ちしき を てにいれた。<br/><br/>そして でんせつ へ...
-          </div>
-          <button onClick={() => window.location.reload()} className="pixel-window px-6 py-3 sm:px-8 sm:py-4 text-lg sm:text-xl hover:bg-white hover:text-black mt-4">
-            はじめから 遊ぶ
-          </button>
-        </div>
-      );
-    }
-
     // ==========================================
-    // メインコンポーネント (App)
+    // 5. アプリケーション本体
     // ==========================================
     function App() {
-      const [gameState, setGameState] = useState('INIT'); 
+      const [audioStarted, setAudioStarted] = useState(false);
+      const [gameState, setGameState] = useState('TITLE'); 
+      
+      const [fb, setFb] = useState(null);
+      const [user, setUser] = useState(null);
+
+      const [heroName, setHeroName] = useState("");
       const [playerPos, setPlayerPos] = useState({ x: 61, y: 16 });
       const [clearedPrefs, setClearedPrefs] = useState([]); 
+      const [saves, setSaves] = useState([]);
+      
       const [encounterPref, setEncounterPref] = useState(null); 
       const [currentBattlePref, setCurrentBattlePref] = useState(null); 
+      
+      const [menuMsg, setMenuMsg] = useState(null);
+      const [savePhase, setSavePhase] = useState(0);
+
+      useEffect(() => {
+        const initFb = async () => {
+          try {
+            const appModule = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js');
+            const authModule = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js');
+            const fsModule = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+            const fns = { ...appModule, ...authModule, ...fsModule };
+            
+            const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            if (config) {
+              const app = fns.initializeApp(config);
+              const auth = fns.getAuth(app);
+              const db = fns.getFirestore(app);
+              setFb({ auth, db, fns });
+
+              if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await fns.signInWithCustomToken(auth, __initial_auth_token);
+              } else {
+                await fns.signInAnonymously(auth);
+              }
+              fns.onAuthStateChanged(auth, setUser);
+            }
+          } catch (e) { console.error("Firebase init err:", e); }
+        };
+        initFb();
+      }, []);
+
+      const fetchSaves = async () => {
+        if (!user || !fb) return;
+        try {
+          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+          const colRef = fb.fns.collection(fb.db, 'artifacts', appId, 'users', user.uid, 'saves');
+          const snap = await fb.fns.getDocs(colRef);
+          const data = snap.docs.map(d => d.data());
+          data.sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+          setSaves(data);
+        } catch(e) { console.error(e); }
+      };
+
+      const executeSave = async () => {
+        if (!user || !fb) return false;
+        try {
+          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+          const docRef = fb.fns.doc(fb.db, 'artifacts', appId, 'users', user.uid, 'saves', heroName);
+          await fb.fns.setDoc(docRef, { heroName, playerPos, clearedPrefs, updatedAt: new Date().toISOString() });
+          return true;
+        } catch(e) { console.error(e); return false; }
+      };
 
       const handleMove = useCallback((dx, dy) => {
         if (gameState !== 'FIELD' || encounterPref) return;
-        
         setPlayerPos(prev => {
-          const nx = prev.x + dx;
-          const ny = prev.y + dy;
-          
+          const nx = prev.x + dx; const ny = prev.y + dy;
           if (ny < 0 || ny >= mapLayout.length || nx < 0 || nx >= mapLayout[0].length) return prev;
           if (mapLayout[ny][nx] === '~') return prev; 
           
           const pref = prefecturesData.find(p => p.x === nx && p.y === ny);
           if (pref && !clearedPrefs.includes(pref.id)) {
-            stopBGM();
-            playSE('encounter');
-            setEncounterPref(pref);
+            stopBGM(); playSE('encounter'); setEncounterPref(pref);
             return prev; 
           }
           playSE('step');
@@ -597,95 +646,226 @@
 
       useEffect(() => {
         const handleKeyDown = (e) => {
-          switch(e.key) {
-            case 'ArrowUp': case 'w': handleMove(0, -1); break;
-            case 'ArrowDown': case 's': handleMove(0, 1); break;
-            case 'ArrowLeft': case 'a': handleMove(-1, 0); break;
-            case 'ArrowRight': case 'd': handleMove(1, 0); break;
-            default: break;
+          if (gameState === 'FIELD' && !encounterPref) {
+            switch(e.key) {
+              case 'ArrowUp': case 'w': handleMove(0, -1); break;
+              case 'ArrowDown': case 's': handleMove(0, 1); break;
+              case 'ArrowLeft': case 'a': handleMove(-1, 0); break;
+              case 'ArrowRight': case 'd': handleMove(1, 0); break;
+              case 'Enter': case ' ': playSE('decide'); setGameState('FIELD_MENU'); break;
+            }
+          } else if (gameState === 'FIELD_MENU' && e.key === 'Escape') {
+            playSE('cancel'); setGameState('FIELD');
           }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-      }, [handleMove]);
+      }, [gameState, encounterPref, handleMove]);
+
+      if (!audioStarted) {
+        return (
+          <div 
+            className="fixed inset-0 flex items-center justify-center bg-black cursor-pointer z-50 text-white"
+            onClick={() => {
+              initAudio();
+              setAudioStarted(true);
+              playBGM('title');
+              setGameState('TITLE');
+            }}
+          >
+            <div className="font-pressstart text-xl sm:text-3xl animate-pulse tracking-widest text-center">
+              TAP TO START
+            </div>
+          </div>
+        );
+      }
+
+      if (gameState === 'TITLE') return (
+        <TitleScreen 
+          onNewGame={() => setGameState('NAME_INPUT')} 
+          onLoadGame={async () => { await fetchSaves(); setGameState('LOAD_GAME'); }} 
+        />
+      );
+
+      if (gameState === 'NAME_INPUT') return (
+        <div className="w-screen h-[100dvh] flex items-center justify-center bg-black p-4 font-dotgothic text-white">
+          <div className="pixel-window p-8 flex flex-col gap-6 w-full max-w-md">
+            <p className="text-2xl">なまえを いれてください</p>
+            <input type="text" value={heroName} onChange={e => setHeroName(e.target.value)} maxLength={6} autoFocus
+              className="bg-black text-white border-2 border-white p-3 text-3xl outline-none font-dotgothic uppercase" />
+            <div className="flex justify-end gap-6 mt-4 text-xl">
+              <button onClick={() => { if(heroName){ playSE('decide'); setPlayerPos({x:61,y:16}); setClearedPrefs([]); playBGM('field'); setGameState('FIELD'); } else { playSE('wrong'); } }} className="hover:text-yellow-400">けってい</button>
+              <button onClick={() => { playSE('cancel'); setGameState('TITLE'); }} className="hover:text-yellow-400">もどる</button>
+            </div>
+          </div>
+        </div>
+      );
+
+      if (gameState === 'LOAD_GAME') return (
+        <div className="w-screen h-[100dvh] flex items-center justify-center bg-black p-4 font-dotgothic text-white">
+          <div className="pixel-window p-6 flex flex-col gap-4 w-full max-w-lg max-h-[80%] overflow-y-auto">
+            <p className="text-2xl mb-4 text-yellow-400">どの ぼうけんのしょ から はじめる？</p>
+            {saves.length === 0 ? (
+              <p className="text-gray-400 text-xl">きろく が ありません</p>
+            ) : (
+              saves.map((s, i) => (
+                <button key={i} onClick={() => { playSE('decide'); setHeroName(s.heroName); setPlayerPos(s.playerPos); setClearedPrefs(s.clearedPrefs || []); playBGM('field'); setGameState('FIELD'); }} className="text-left hover:text-yellow-400 border border-gray-600 p-4 mb-2 text-xl transition-colors">
+                  ゆうしゃ： {s.heroName} <br/>
+                  せいは： {s.clearedPrefs.length} / 47 <br/>
+                  <span className="text-sm text-gray-400">{new Date(s.updatedAt).toLocaleString()}</span>
+                </button>
+              ))
+            )}
+            <div className="mt-4 flex justify-end">
+              <button onClick={() => { playSE('cancel'); setGameState('TITLE'); }} className="text-xl hover:text-yellow-400">もどる</button>
+            </div>
+          </div>
+        </div>
+      );
 
       return (
         <div className="w-screen h-[100dvh] overflow-hidden bg-black font-dotgothic select-none flex justify-center text-white text-sm sm:text-base">
           <div className="w-full max-w-4xl h-full relative border-x-0 sm:border-x-4 border-gray-800 flex flex-col">
             
-            {gameState === 'INIT' && (
-              <div className="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-gray-900 transition-colors"
-                   onClick={() => {
-                     initAudio();
-                     playBGM('title');
-                     setGameState('TITLE');
-                   }}>
-                 <div className="pixel-window p-8 text-xl sm:text-3xl animate-pulse text-center leading-loose">
-                    ♪ サウンドが なります<br/><br/>がめん を タップ して<br/>はじめる
-                 </div>
+            {/* FIELD MAP */}
+            {(gameState === 'FIELD' || gameState === 'FIELD_MENU' || gameState === 'SAVE_DIALOG') && (
+              <div className="w-full h-full relative bg-[#1e3a8a] overflow-hidden">
+                <div className="absolute left-1/2 top-1/2 transition-transform duration-200"
+                     style={{ transform: `translate(calc(-50% - ${playerPos.x * TILE_SIZE}px), calc(-50% - ${playerPos.y * TILE_SIZE}px))` }}>
+                  {mapLayout.map((row, y) => row.split('').map((tile, x) => {
+                    const pref = prefecturesData.find(p => p.x === x && p.y === y);
+                    return (
+                      <div key={`${x}-${y}`} className="absolute" style={{ left: x * TILE_SIZE, top: y * TILE_SIZE, width: TILE_SIZE, height: TILE_SIZE }}>
+                        <Tile type={tile} />
+                        {pref && <div className="absolute inset-0 flex items-center justify-center">{clearedPrefs.includes(pref.id) ? <FlagIcon /> : <CastleIcon />}</div>}
+                      </div>
+                    );
+                  }))}
+                  <div className="absolute flex items-center justify-center z-10" style={{ left: playerPos.x * TILE_SIZE, top: playerPos.y * TILE_SIZE, width: TILE_SIZE, height: TILE_SIZE }}>
+                    <HeroIcon />
+                  </div>
+                </div>
+
+                <div className="absolute bottom-4 left-4 grid grid-cols-3 gap-1 opacity-80 z-20">
+                  <div />
+                  <button className="pixel-window w-14 h-14 flex items-center justify-center text-2xl active:bg-gray-500" onClick={() => handleMove(0, -1)}>▲</button>
+                  <div />
+                  <button className="pixel-window w-14 h-14 flex items-center justify-center text-2xl active:bg-gray-500" onClick={() => handleMove(-1, 0)}>◀</button>
+                  <div className="w-14 h-14 bg-gray-900 border-2 border-gray-700 rounded-full flex justify-center items-center"></div>
+                  <button className="pixel-window w-14 h-14 flex items-center justify-center text-2xl active:bg-gray-500" onClick={() => handleMove(1, 0)}>▶</button>
+                  <div />
+                  <button className="pixel-window w-14 h-14 flex items-center justify-center text-2xl active:bg-gray-500" onClick={() => handleMove(0, 1)}>▼</button>
+                  <div />
+                </div>
+                
+                <div className="absolute bottom-8 right-6 flex gap-4 opacity-90 z-20">
+                  <button className="pixel-window w-16 h-16 rounded-full flex items-center justify-center text-3xl active:bg-gray-500" onClick={() => { playSE('decide'); setGameState('FIELD_MENU'); }}>Ａ</button>
+                  <button className="pixel-window w-16 h-16 rounded-full flex items-center justify-center text-3xl active:bg-gray-500" onClick={() => { playSE('cancel'); setGameState('FIELD'); }}>Ｂ</button>
+                </div>
               </div>
             )}
 
-            {gameState === 'TITLE' && <TitleScreen onStart={() => {
-                playSE('correct');
-                playBGM('field');
-                setGameState('FIELD');
-            }} />}
-            
-            {gameState === 'FIELD' && (
-              <FieldScreen playerPos={playerPos} clearedPrefs={clearedPrefs} onMove={handleMove} />
-            )}
-            
-            {gameState === 'FIELD' && encounterPref && (
-              <EncounterDialog 
-                pref={encounterPref} 
-                onYes={() => { 
-                  setCurrentBattlePref(encounterPref);
-                  setGameState('BATTLE'); 
-                  setEncounterPref(null); 
-                  playBGM('battle');
-                }} 
-                onNo={() => {
-                  setEncounterPref(null);
-                  playBGM('field');
-                }} 
-              />
+            {/* FIELD MENU */}
+            {gameState === 'FIELD_MENU' && (
+              <div className="absolute inset-0 bg-black/40 z-30" onClick={() => { playSE('cancel'); setGameState('FIELD'); setMenuMsg(null); }}>
+                <div className="pixel-window p-4 absolute top-4 left-4 flex flex-col gap-4 text-2xl w-48" onClick={e => e.stopPropagation()}>
+                  <button className="text-left hover:text-yellow-400" onClick={() => { playSE('decide'); setMenuMsg("だれも いないようだ。"); }}>はなす</button>
+                  <button className="text-left hover:text-yellow-400" onClick={() => { playSE('decide'); setMenuMsg(`ゆうしゃ ${heroName}\nせいは： ${clearedPrefs.length} / 47`); }}>つよさ</button>
+                  <button className="text-left hover:text-yellow-400" onClick={() => { 
+                    if(!fb || !user) { playSE('wrong'); setMenuMsg("ぼうけんのしょ が つかえない！"); }
+                    else { playSE('decide'); setSavePhase(1); setGameState('SAVE_DIALOG'); }
+                  }}>セーブ</button>
+                  <button className="text-left hover:text-gray-400 mt-2" onClick={() => { playSE('cancel'); setGameState('FIELD'); setMenuMsg(null); }}>とじる</button>
+                </div>
+                {menuMsg && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pixel-window p-6 w-11/12 max-w-lg text-xl leading-loose cursor-pointer" onClick={(e) => { e.stopPropagation(); playSE('cursor'); setMenuMsg(null); }}>
+                    {menuMsg.split('\n').map((m, i) => <div key={i}>{m}</div>)}
+                    <div className="absolute bottom-2 right-3 animate-pulse">▼</div>
+                  </div>
+                )}
+              </div>
             )}
 
+            {/* SAVE DIALOG */}
+            {gameState === 'SAVE_DIALOG' && (
+              <div className="absolute inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+                <div className="pixel-window p-6 w-full max-w-md text-xl sm:text-2xl leading-loose">
+                  {savePhase === 1 && (
+                    <>
+                      <p>ぼうけんのしょ に きろく しますか？</p>
+                      <div className="flex justify-end gap-6 mt-6">
+                        <button onClick={async () => { playSE('decide'); setSavePhase(2); await executeSave(); setSavePhase(3); playSE('correct'); }} className="hover:text-yellow-400">はい</button>
+                        <button onClick={() => { playSE('cancel'); setGameState('FIELD_MENU'); }} className="hover:text-yellow-400">いいえ</button>
+                      </div>
+                    </>
+                  )}
+                  {savePhase === 2 && <p className="animate-pulse">きろく しています...</p>}
+                  {savePhase === 3 && (
+                    <>
+                      <p>きろくが おわりました。<br/>ぼうけん を つづけますか？</p>
+                      <div className="flex justify-end gap-6 mt-6">
+                        <button onClick={() => { playSE('decide'); setGameState('FIELD'); }} className="hover:text-yellow-400">はい</button>
+                        <button onClick={() => { playSE('cancel'); setGameState('TITLE'); playBGM('title'); }} className="hover:text-yellow-400">いいえ</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* ENCOUNTER DIALOG */}
+            {gameState === 'FIELD' && encounterPref && (
+              <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                <div className="pixel-window p-4 sm:p-6 w-full max-w-sm sm:max-w-md flex flex-col gap-4 sm:gap-6 border-4 border-yellow-400">
+                  <p className="text-xl sm:text-2xl leading-relaxed text-center">
+                    {encounterPref.name} に とうちゃくした！<br/>クイズに ちょうせん しますか？
+                  </p>
+                  <div className="flex justify-center gap-8 mt-2 sm:mt-4 text-xl">
+                    <button className="pixel-window px-4 py-2 hover:bg-white hover:text-black w-24 transition-colors" 
+                      onClick={() => { playSE('attack'); setCurrentBattlePref(encounterPref); setGameState('BATTLE'); setEncounterPref(null); playBGM('battle'); }}>はい</button>
+                    <button className="pixel-window px-4 py-2 hover:bg-white hover:text-black w-24 transition-colors" 
+                      onClick={() => { playSE('cancel'); setEncounterPref(null); playBGM('field'); }}>いいえ</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* BATTLE SCREEN COMPONENT */}
             {gameState === 'BATTLE' && currentBattlePref && (
               <BattleScreen 
                 pref={currentBattlePref} 
-                onWin={(prefId) => {
-                  const newCleared = [...clearedPrefs, prefId];
-                  setClearedPrefs(newCleared);
+                heroName={heroName}
+                onWin={(id) => {
+                  const newC = [...clearedPrefs, id]; 
+                  setClearedPrefs(newC); 
                   setCurrentBattlePref(null);
-                  if (newCleared.length >= 47) {
-                    stopBGM();
-                    playSE('clear');
-                    setGameState('GAMECLEAR');
-                  } else {
-                    setGameState('FIELD');
-                    playBGM('field');
-                  }
-                }} 
+                  if(newC.length >= 47){ stopBGM(); playSE('clear'); setGameState('GAMECLEAR'); } 
+                  else { setGameState('FIELD'); playBGM('field'); }
+                }}
                 onLose={() => {
-                  setCurrentBattlePref(null);
-                  setGameState('FIELD');
-                  playBGM('field');
-                }} 
+                  setCurrentBattlePref(null); setGameState('FIELD'); playBGM('field');
+                }}
               />
             )}
 
-            {gameState === 'GAMECLEAR' && <GameClearScreen />}
+            {/* GAMECLEAR */}
+            {gameState === 'GAMECLEAR' && (
+              <div className="flex flex-col items-center justify-center w-full h-full space-y-8 bg-black p-4 z-50 relative">
+                <h1 className="text-4xl sm:text-6xl font-bold text-center leading-tight text-yellow-400 animate-bounce">おめでとう！<br/>にほん ぜんこく せいは！</h1>
+                <div className="text-xl sm:text-3xl text-white text-center leading-loose pixel-window p-8">ゆうしゃ は 47とどうふけん の<br/>すべての ちしき を てにいれた。<br/><br/>そして でんせつ へ...</div>
+                <button onClick={() => window.location.reload()} className="pixel-window px-8 py-4 text-2xl hover:bg-white hover:text-black mt-4 transition-colors">はじめから 遊ぶ</button>
+              </div>
+            )}
+
           </div>
         </div>
       );
     }
 
-    // 最後にReactアプリを描画
     const root = ReactDOM.createRoot(document.getElementById("root"));
     root.render(<App />);
   </script>
 </body>
 </html>
+
 
