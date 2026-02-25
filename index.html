@@ -11,69 +11,105 @@
   <script src="https://cdn.tailwindcss.com"></script>
   
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
     
     body { 
-      margin: 0; padding: 0; overflow: hidden; background-color: black; 
-      user-select: none; touch-action: manipulation; -webkit-user-select: none;
+      margin: 0; padding: 0; overflow: hidden; background-color: #000; 
+      user-select: none; touch-action: none; -webkit-user-select: none;
+      font-family: 'DotGothic16', monospace;
     }
-    .font-dotgothic { font-family: 'DotGothic16', sans-serif; }
-    .font-pressstart { font-family: 'Press Start 2P', cursive; }
     
-    .pixel-window { 
-      border: 3px solid white; 
+    /* DQ1風のウィンドウ (白枠・黒背景) */
+    .dq-window { 
       background-color: black; 
       color: white; 
-      border-radius: 6px;
-      box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+      border: 3px solid white;
+      border-radius: 4px;
+      box-shadow: inset 0 0 0 2px black, 0 0 0 2px black; /* 疑似的な二重線 */
+      image-rendering: pixelated;
     }
-    @media (min-width: 640px) {
-      .pixel-window { border-width: 4px; border-radius: 8px; }
-    }
+    
+    /* テキストの点滅 */
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    .animate-blink { animation: blink 1s step-end infinite; }
+    
     ::-webkit-scrollbar { width: 4px; background: transparent; }
     ::-webkit-scrollbar-thumb { background: white; border-radius: 4px; }
 
-    /* 光のアニメーション */
-    @keyframes pulse-glow {
-      0% { filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 10px #fef08a); }
-      50% { filter: drop-shadow(0 0 15px #fff) drop-shadow(0 0-30px #fef08a); }
-      100% { filter: drop-shadow(0 0 5px #fff) drop-shadow(0 0 10px #fef08a); }
+    /* 文字のはみ出し防止 */
+    .word-break-all {
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
-    .sword-glow { animation: pulse-glow 2s infinite ease-in-out; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-    import { getFirestore, doc, setDoc, getDocs, collection, query } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-
-    // ==========================================
-    // 1. Firebase 設定と初期化
-    // ==========================================
-    const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'japan-quest-v1';
-
-    window.JQ_FB = { auth, db, appId, firestore: { doc, setDoc, getDocs, collection, query } };
-    window.JQ_AUTH_INIT = async () => {
-      if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
-        return await signInWithCustomToken(auth, window.__initial_auth_token);
-      } else {
-        return await signInAnonymously(auth);
-      }
-    };
-  </script>
-
   <script type="text/babel">
-    const { useState, useEffect, useCallback, Fragment, useRef } = React;
+    const { useState, useEffect, useCallback, useRef, Fragment } = React;
 
     // ==========================================
-    // 2. オーディオエンジン
+    // 1. 8bit風 ドット絵エンジン & データ
+    // ==========================================
+    const PAL = {
+      'B': '#000000', 'W': '#FFFFFF', 'R': '#E52521', 'G': '#008A00', 
+      'L': '#004A9C', 'Y': '#F6B700', 'O': '#E57300', 'P': '#FF99CC', 
+      'D': '#663300', 'S': '#A0A0A0', 'C': '#00FFFF', 'K': '#FFCC99',
+      'T': 'transparent'
+    };
+
+    const SPRITES_MAP = {
+      hero: [
+        "TTTBBBBBBTTT", "TTBWKKKKBTBT", "TBKBBKBBKBBT", "TBKKKKKKKBTB",
+        "TTBBKKKKBBTT", "TTBRRRRRRBTT", "TBBRBRRBBRBT", "BRBBRRRRBBTB",
+        "BTBRRRRRRBTB", "TTBBYYYYBBTT", "TBBBTTTTBBBT", "TBBTTTTTTBBT"
+      ],
+      castle: [
+        "TWTBTWTBTWTB", "TWTWTWTWTWTB", "TWWWWWWWWWWB", "TWTWTWTWTWTB",
+        "TWWWWWWWWWWB", "TWTTTTTTTTWB", "TWTTWWWWWTTB", "TWTTWTBTWTBB",
+        "TWTTWTBTWTBB", "TWTTWTBTWTBB"
+      ],
+      mountain: [
+        "TTTTTTBTTTTT", "TTTTTBTBTTTT", "TTTTBDBDBTTT", "TTTBDDDBDBTT",
+        "TTBDDBBBDDBT", "TBDDDDBDDDDB", "TBBBBBBBBBBB"
+      ],
+      tree: [
+        "TTTTBBBBTTTT", "TTTBGGGGBTTT", "TTBGGGGGGBTT", "TBGGGBGGGBTT",
+        "TBGGGGGGBTTT", "TTBBGGBBTTTT", "TTTTDDTTTTTT", "TTTTDDTTTTTT"
+      ],
+      slime: [
+        "TTTTBBBBTTTT", "TTTBCCCCBTTT", "TTBCCCCCCBTT", "TBCCCBCCBCBT",
+        "TBCCBCCCCCBT", "TBCCCCCCCCBT", "TBCCCCCCCCBT", "TTBBBBBBBBTT"
+      ],
+      ghost: [
+        "TTTTBBBBTTTT", "TTBWWWWWWBTB", "TBWWBWWWBWBB", "BWWBBWWBBWWB",
+        "BWWWWWWWWWWB", "TBWWWWWWWWTB", "TBBWWBBWWBBT", "TTBBTTTBBTTT"
+      ],
+      dragon: [
+        "TTTBBBBTTTTT", "TTBRRRRBBTTT", "TBRRRRRRRBTT", "BRRBBRRBBRBT",
+        "BRRRRRRRRRBT", "TTBBBRRRBTTT", "TTBRRRRBBTTT", "TBRRBBBRRBTT",
+        "BRRBTBTBRRBT", "BBTTTTTTTBBT"
+      ]
+    };
+
+    function PixelArt({ name, size = 32, className = "" }) {
+      const pattern = SPRITES_MAP[name];
+      if (!pattern) return null;
+      const w = pattern[0].length; const h = pattern.length;
+      const pw = size / w; const ph = size / h;
+      return (
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className={`inline-block ${className}`}>
+          {pattern.map((row, y) => row.split('').map((c, x) => {
+            if (c === 'T' || !PAL[c]) return null;
+            return <rect key={`${x}-${y}`} x={x*pw} y={y*ph} width={pw+0.5} height={ph+0.5} fill={PAL[c]} />
+          }))}
+        </svg>
+      );
+    }
+
+    // ==========================================
+    // 2. オーディオエンジン (徹底的なDQ風)
     // ==========================================
     let audioCtx = null;
     let bgmTimer = null;
@@ -83,116 +119,86 @@
     let nextBGMTime = 0;
 
     const initAudio = () => {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
     };
 
     const playTone = (freq, type, duration, vol = 0.1) => {
-      if (!audioCtx) return;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      if (!audioCtx || freq === 0) return;
+      const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+      osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
       gain.gain.setValueAtTime(vol, audioCtx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + duration);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + duration);
     };
 
     const playSE = (type) => {
       if (!audioCtx) return;
       const now = audioCtx.currentTime;
-      if (type === 'cursor') {
-        playTone(880, 'square', 0.05, 0.05);
-      } else if (type === 'decide') {
-        setTimeout(() => playTone(880, 'square', 0.05, 0.05), 0);
-        setTimeout(() => playTone(1108, 'square', 0.05, 0.05), 100);
-      } else if (type === 'attack') {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(800, now);
-        osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(now + 0.15);
-      } else if (type === 'correct') {
-        setTimeout(() => playTone(523.25, 'square', 0.1, 0.1), 0);
-        setTimeout(() => playTone(659.25, 'square', 0.1, 0.1), 100);
-        setTimeout(() => playTone(783.99, 'square', 0.2, 0.1), 200);
-      } else if (type === 'wrong') {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(150, now);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.setValueAtTime(0.2, now + 0.2);
-        gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(now + 0.3);
-      } else if (type === 'win') {
-        setTimeout(() => playTone(523.25, 'square', 0.1, 0.1), 0);
-        setTimeout(() => playTone(587.33, 'square', 0.1, 0.1), 100);
-        setTimeout(() => playTone(659.25, 'square', 0.1, 0.1), 200);
-        setTimeout(() => playTone(698.46, 'square', 0.1, 0.1), 300);
-        setTimeout(() => playTone(783.99, 'square', 0.4, 0.1), 400);
-      } else if (type === 'step') {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(120, now);
-        osc.frequency.exponentialRampToValueAtTime(20, now + 0.05);
-        gain.gain.setValueAtTime(0.05, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.start(); osc.stop(now + 0.05);
-      } else if (type === 'cancel') {
-        playTone(440, 'square', 0.1, 0.05);
+      if (type === 'cursor') playTone(1500, 'square', 0.03, 0.05);
+      if (type === 'decide') { playTone(1000, 'square', 0.03, 0.05); setTimeout(() => playTone(1500, 'square', 0.03, 0.05), 40); }
+      if (type === 'cancel') playTone(200, 'sawtooth', 0.1, 0.05);
+      if (type === 'step') playTone(100, 'sawtooth', 0.04, 0.03);
+      if (type === 'encounter') {
+        for(let i=0; i<6; i++) {
+          setTimeout(() => playTone(1200, 'square', 0.04, 0.1), i*80);
+          setTimeout(() => playTone(800, 'square', 0.04, 0.1), i*80 + 40);
+        }
+      }
+      if (type === 'attack') {
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(800, now); osc.frequency.exponentialRampToValueAtTime(10, now + 0.15);
+        gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(now + 0.15);
+      }
+      if (type === 'damage') {
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.type = 'square'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(20, now + 0.2);
+        gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(now + 0.2);
+      }
+      if (type === 'levelup') {
+        const notes = [ [349.23, 0.1], [349.23, 0.1], [349.23, 0.1], [349.23, 0.3], [329.63, 0.15], [349.23, 0.15], [392.00, 0.6] ];
+        let t = 0; notes.forEach(([f, d]) => { setTimeout(() => playTone(f, 'square', d, 0.1), t); t += (d * 1000) + 20; });
+      }
+      if (type === 'escape') {
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.3);
+        gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(now + 0.3);
+      }
+      if (type === 'win') {
+        [523.25, 587.33, 659.25, 698.46, 783.99].forEach((f, i) => { setTimeout(() => playTone(f, 'square', i===4?0.5:0.1, 0.1), i * 120); });
       }
     };
 
     const BGM_DATA = {
-      title: [[392,0.2],[392,0.2],[392,0.2],[523.25,0.6],[392,0.6],[523.25,0.4],[587.33,0.4],[659.25,0.8]],
-      field: [[261.63,0.25],[329.63,0.25],[392,0.25],[329.63,0.25],[293.66,0.25],[349.23,0.25],[440,0.25],[349.23,0.25]],
-      battle: [[130.81,0.15],[130.81,0.15],[146.83,0.15],[130.81,0.15],[130.81,0.15],[155.56,0.15],[130.81,0.15],[146.83,0.15]]
+      title: [[392, 0.3], [392, 0.3], [392, 0.3], [523, 0.9], [392, 0.6], [523, 0.3], [587, 0.3], [659, 0.3], [698, 0.3], [783, 1.2], [0, 0.6]],
+      field: [[440, 0.5], [659, 0.5], [523, 0.5], [493, 0.5], [440, 0.5], [392, 0.5], [440, 1.0], [0, 0.5]],
+      battle: [[261, 0.12], [277, 0.12], [293, 0.12], [311, 0.12], [329, 0.12], [349, 0.12], [370, 0.12], [392, 0.12],[392, 0.12], [370, 0.12], [349, 0.12], [329, 0.12], [311, 0.12], [293, 0.12], [277, 0.12], [261, 0.12]]
     };
 
     const stopBGM = () => {
       currentBGMType = null;
       if (bgmTimer) { clearTimeout(bgmTimer); bgmTimer = null; }
-      if (bgmMasterGain) {
-        try {
-          bgmMasterGain.gain.cancelScheduledValues(audioCtx.currentTime);
-          bgmMasterGain.gain.setValueAtTime(0, audioCtx.currentTime);
-          bgmMasterGain.disconnect();
-        } catch(e){}
-        bgmMasterGain = null;
-      }
+      if (bgmMasterGain) { try { bgmMasterGain.gain.setValueAtTime(0, audioCtx.currentTime); bgmMasterGain.disconnect(); } catch(e){} bgmMasterGain = null; }
     };
 
     const scheduleBGM = () => {
       if (!currentBGMType || !audioCtx || !bgmMasterGain) return;
       while (nextBGMTime < audioCtx.currentTime + 0.1) {
         const melody = BGM_DATA[currentBGMType];
+        if (!melody) break;
         const [freq, duration] = melody[currentBGMStep];
         if (freq > 0) {
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
+          const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
           osc.type = currentBGMType === 'battle' ? 'sawtooth' : 'square';
           osc.frequency.setValueAtTime(freq, nextBGMTime);
           gain.gain.setValueAtTime(0.04, nextBGMTime);
           gain.gain.exponentialRampToValueAtTime(0.001, nextBGMTime + duration * 0.9);
-          osc.connect(gain);
-          gain.connect(bgmMasterGain);
-          osc.start(nextBGMTime);
-          osc.stop(nextBGMTime + duration);
+          osc.connect(gain); gain.connect(bgmMasterGain);
+          osc.start(nextBGMTime); osc.stop(nextBGMTime + duration);
         }
         nextBGMTime += duration;
         currentBGMStep = (currentBGMStep + 1) % melody.length;
@@ -202,126 +208,82 @@
 
     const playBGM = (type) => {
       if (!audioCtx) return;
-      stopBGM();
-      currentBGMType = type;
-      currentBGMStep = 0;
-      nextBGMTime = audioCtx.currentTime + 0.05;
-      bgmMasterGain = audioCtx.createGain();
-      bgmMasterGain.connect(audioCtx.destination);
+      stopBGM(); currentBGMType = type; currentBGMStep = 0; nextBGMTime = audioCtx.currentTime + 0.05;
+      bgmMasterGain = audioCtx.createGain(); bgmMasterGain.connect(audioCtx.destination);
       scheduleBGM();
     };
 
     // ==========================================
-    // 3. タイトル画面 (Tを聖剣化したSVG)
-    // ==========================================
-    function TitleScreen({ onNewGame, onLoadGame }) {
-      const [cursorY, setCursorY] = useState(0); 
-
-      useEffect(() => {
-        const handleKeyDown = (e) => {
-          if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'w' || e.key === 's') {
-            playSE('cursor'); setCursorY(c => (c === 0 ? 1 : 0));
-          } else if (e.key === 'Enter' || e.key === ' ') {
-            playSE('decide');
-            if (cursorY === 0) onNewGame(); else onLoadGame();
-          }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-      }, [cursorY, onNewGame, onLoadGame]);
-
-      return (
-        <div className="w-full h-full flex flex-col items-center justify-between pt-12 pb-8 sm:pt-16" style={{ backgroundColor: '#375280' }}>
-          <svg viewBox="0 0 800 320" className="w-full max-w-4xl mx-auto flex-shrink-0 drop-shadow-[0_15px_25px_rgba(0,0,0,0.6)]">
-            <defs>
-              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="8" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
-            </defs>
-
-            {/* 日本列島 */}
-            <g transform="translate(180, 140) scale(1.6) rotate(-10)" fill="black">
-              <path d="M 50,-80 L 70,-80 L 90,-60 L 90,-40 L 70,-30 L 40,-40 Z" />
-              <path d="M 40,-20 L 50,0 L 20,20 L -20,30 L -60,50 L -100,80 L -110,100 L -100,110 L -60,80 L -20,50 L 20,40 L 50,20 L 60,0 Z" />
-              <path d="M -60,70 L -50,85 L -75,85 L -80,70 Z" />
-              <path d="M -90,90 L -85,110 L -115,120 L -120,100 Z" />
-            </g>
-
-            {/* メインロゴ */}
-            <g transform="translate(400, 160) rotate(-6) scale(1, 1.2)">
-              {/* 文字の厚み表現 */}
-              {[-12, -9, -6, -3, 0].map((offset, i, arr) => {
-                const colors = ["#1f2937", "#374151", "#6b7280", "#d1d5db", "#ffffff"];
-                const c = colors[i];
-                const isFront = i === arr.length - 1;
-                return (
-                  <g key={offset} transform={`translate(${offset}, ${-offset})`}>
-                    <text x="0" y="0" fontFamily="'Press Start 2P', cursive" fontSize="60" fill={c} textAnchor="middle">
-                      JAPAN QUES<tspan fill="transparent">T</tspan>
-                    </text>
-                    {/* Tの代わりの剣 */}
-                    <g transform="translate(305, 0) scale(0.75)" className={isFront ? "sword-glow" : ""}>
-                      <polygon points="-15,-60 -15,5 0,40 15,5 15,-60" fill={isFront ? "#f8fafc" : c} />
-                      {isFront && <polygon points="0,-60 0,40 15,5 15,-60" fill="#cbd5e1" />}
-                      {/* つば */}
-                      <rect x="-45" y="-75" width="90" height="15" fill={isFront ? "#e2e8f0" : c} />
-                      {/* 柄 */}
-                      <rect x="-10" y="-115" width="20" height="40" fill={isFront ? "#475569" : c} />
-                      {/* 柄頭 */}
-                      <circle cx="0" cy="-125" r="15" fill={isFront ? "#cbd5e1" : c} />
-                    </g>
-                  </g>
-                );
-              })}
-              
-              {/* 強烈な閃光 */}
-              <g transform="translate(305, -35)">
-                <circle cx="0" cy="0" r="40" fill="#fef08a" filter="url(#glow)" opacity="0.8" />
-                <path d="M -4,-150 L 4,-150 L 8,-12 L 150,-4 L 150,4 L 8,12 L 4,150 L -4,150 L -8,12 L -150,4 L -150,-4 L -8,-12 Z" fill="white" filter="url(#glow)" />
-              </g>
-            </g>
-          </svg>
-          
-          <div className="flex flex-col items-center font-pressstart text-white text-sm sm:text-xl tracking-[0.15em] w-full flex-1 justify-center mt-8">
-            <div className="pixel-window p-8 flex flex-col gap-8 w-80">
-              <div className="relative cursor-pointer hover:text-yellow-400 transition-colors" 
-                   onClick={() => onNewGame()}>
-                <span className="absolute -left-8">{cursorY === 0 ? '▶' : ''}</span>START
-              </div>
-              <div className="relative cursor-pointer hover:text-yellow-400 transition-colors" 
-                   onClick={() => onLoadGame()}>
-                <span className="absolute -left-8">{cursorY === 1 ? '▶' : ''}</span>CONTINUE
-              </div>
-            </div>
-          </div>
-          <div className="font-pressstart text-[#c1cbe0] text-xs sm:text-sm tracking-[0.2em] mt-4 opacity-70">
-            ©2026 JQ PROJECT
-          </div>
-        </div>
-      );
-    }
-
-    // ==========================================
-    // 4. ゲームデータ
+    // 3. マップ & 全47都道府県データ (各6問)
     // ==========================================
     const TILE_SIZE = 32;
+
     const prefRawData = [
-      [1, '北海道', 71, 3, [['道庁所在地は？','札幌市','函館市','旭川市','小樽市'],['世界自然遺産は？','知床半島','積丹半島','根室半島','渡島半島']]],
-      [2, '青森県', 66, 7, [['県庁所在地は？','青森市','弘前市','八戸市','むつ市'],['日本一の果物は？','りんご','みかん','もも','ぶどう']]],
-      [13, '東京都', 61, 16, [['都庁所在地は？','新宿区','渋谷区','千代田区','港区'],['日本一高い塔は？','スカイツリー','東京タワー','通天閣','福岡タワー']]],
-      [27, '大阪府', 55, 20, [['府庁所在地は？','大阪市','堺市','東大阪市','豊中市'],['名物の粉ものは？','たこ焼き','もんじゃ焼き','きしめん','ほうとう']]],
-      [47, '沖縄県', 9, 36, [['県庁所在地は？','那覇市','沖縄市','うるま市','浦添市'],['かつての王国は？','琉球王国','大和朝廷','蝦夷島政府','邪馬台国']]]
-      // (データ量を調整して軽量化)
+      [1, '北海道', 71, 3, [['道庁所在地は？','札幌市','函館市','旭川市','小樽市'],['世界自然遺産に登録されている半島は？','知床半島','積丹半島','根室半島','渡島半島'],['マリモが生息する有名な湖は？','阿寒湖','摩周湖','洞爺湖','屈斜路湖'],['北海道の先住民族は？','アイヌ','琉球民族','ウィルタ','ニヴフ'],['北海道が生産量日本一の野菜は？','じゃがいも','キャベツ','トマト','ナス'],['有名な冬のお祭りは？','さっぽろ雪まつり','かまくら祭','なまはげ','ねぶた祭']]],
+      [2, '青森県', 66, 7, [['県庁所在地は？','青森市','弘前市','八戸市','むつ市'],['有名なお祭りは？','ねぶた祭','竿燈まつり','七夕まつり','花笠まつり'],['生産量日本一の果物は？','りんご','みかん','もも','ぶどう'],['世界自然遺産の山地は？','白神山地','八甲田山','恐山','岩木山'],['北海道と繋がるトンネルは？','青函トンネル','関門トンネル','津軽トンネル','アクアライン'],['有名なマグロの産地は？','大間','石巻','焼津','勝浦']]],
+      [3, '岩手県', 66, 9, [['県庁所在地は？','盛岡市','花巻市','北上市','奥州市'],['世界遺産の金色堂があるお寺は？','中尊寺','毛越寺','瑞巌寺','立石寺'],['次々とそばをお椀に入れる郷土料理は？','わんこそば','戸隠そば','出雲そば','越前そば'],['複雑に入り組んだ海岸地形を何という？','リアス海岸','砂浜海岸','サンゴ礁海岸','フィヨルド'],['伝統工芸品の鉄器といえば？','南部鉄器','燕三条鉄器','高岡銅器','伊万里焼'],['「銀河鉄道の夜」の作者は？','宮沢賢治','太宰治','石川啄木','夏目漱石']]],
+      [4, '宮城県', 65, 11, [['県庁所在地は？','仙台市','石巻市','大崎市','気仙沼市'],['初代仙台藩主の戦国武将は？','伊達政宗','上杉謙信','武田信玄','毛利元就'],['名物の肉料理といえば？','牛タン','ジンギスカン','豚の角煮','馬刺し'],['日本三景の一つである島々は？','松島','宮島','天橋立','江の島'],['有名な夏のお祭りは？','仙台七夕まつり','阿波おどり','よさこい祭り','祇園祭'],['三陸沖の世界三大漁場の一つは？','金華山沖','銚子沖','根室沖','玄界灘']]],
+      [5, '秋田県', 64, 9, [['県庁所在地は？','秋田市','横手市','大館市','能代市'],['大晦日に家々を回る伝統行事は？','なまはげ','かまくら','竿燈まつり','さんさ踊り'],['ご飯をすりつぶして串に刺した郷土料理は？','きりたんぽ','だまこもち','ずんだ餅','笹かまぼこ'],['日本で一番深い湖は？','田沢湖','琵琶湖','摩周湖','猪苗代湖'],['天然記念物に指定されている日本犬は？','秋田犬','柴犬','甲斐犬','土佐犬'],['有名な夏のお祭りは？','秋田竿燈まつり','ねぶた祭','花笠まつり','七夕まつり']]],
+      [6, '山形県', 63, 11, [['県庁所在地は？','山形市','鶴岡市','酒田市','米沢市'],['生産量日本一の果物は？','さくらんぼ','りんご','もも','ぶどう'],['樹氷で有名な温泉地・スキー場は？','蔵王','草津','白馬','ニセコ'],['県内を流れる「五月雨を…」で詠まれた川は？','最上川','信濃川','阿賀野川','利根川'],['生産量日本一を誇るボードゲームの道具は？','将棋駒','囲碁石','麻雀牌','花札'],['花笠を手に踊る夏のお祭りは？','花笠まつり','さんさ踊り','よさこい','阿波おどり']]],
+      [7, '福島県', 63, 12, [['県庁所在地は？','福島市','郡山市','いわき市','会津若松市'],['日本で4番目に広い湖は？','猪苗代湖','琵琶湖','霞ヶ浦','サロマ湖'],['日本三大ラーメンの一つとされるのは？','喜多方ラーメン','博多ラーメン','札幌ラーメン','和歌山ラーメン'],['黄熱病の研究で知られる福島出身の偉人は？','野口英世','北里柴三郎','福沢諭吉','渋沢栄一'],['白虎隊で有名な会津若松のお城は？','鶴ヶ城','青葉城','弘前城','白石城'],['首が揺れる赤い牛の郷土玩具は？','赤べこ','起き上がり小法師','こけし','だるま']]],
+      [8, '茨城県', 64, 14, [['県庁所在地は？','水戸市','つくば市','日立市','土浦市'],['名物として知られる大豆の発酵食品は？','納豆','味噌','醤油','豆腐'],['日本三名園の一つである水戸の庭園は？','偕楽園','兼六園','後楽園','栗林公園'],['日本で2番目に広い湖は？','霞ヶ浦','琵琶湖','サロマ湖','猪苗代湖'],['宇宙航空研究開発機構(JAXA)がある市は？','つくば市','水戸市','日立市','鹿嶋市'],['ギネス記録を持つ青銅製の巨大仏像は？','牛久大仏','鎌倉大仏','奈良の大仏','高岡大仏']]],
+      [9, '栃木県', 62, 14, [['県庁所在地は？','宇都宮市','小山市','栃木市','足利市'],['徳川家康を祀る世界遺産の神社は？','日光東照宮','明治神宮','伊勢神宮','出雲大社'],['「とちおとめ」で知られる生産量日本一の果物は？','いちご','もも','ぶどう','メロン'],['宇都宮市が消費量日本一を争う食べ物は？','餃子','うどん','ラーメン','カレー'],['日本三大名瀑の一つである滝は？','華厳の滝','那智の滝','袋田の滝','白糸の滝'],['かつて公害事件が起きた有名な銅山は？','足尾銅山','別子銅山','生野銀山','石見銀山']]],
+      [10, '群馬県', 61, 14, [['県庁所在地は？','前橋市','高崎市','太田市','伊勢崎市'],['湯畑で有名な日本三名泉の一つは？','草津温泉','有馬温泉','下呂温泉','別府温泉'],['生産量日本一のイモ類加工食品は？','こんにゃく','ところてん','寒天','しらたき'],['世界遺産に登録された明治時代の絹糸工場は？','富岡製糸場','八幡製鉄所','長崎造船所','三池炭鉱'],['高崎市が生産量日本一を誇る縁起物は？','だるま','招き猫','赤べこ','こけし'],['嬬恋村で栽培が盛んな高原野菜は？','キャベツ','レタス','白菜','大根']]],
+      [11, '埼玉県', 61, 15, [['県庁所在地は？','さいたま市','川口市','川越市','所沢市'],['名物の硬いおせんべいといえば？','草加せんべい','ぬれせんべい','南部せんべい','瓦せんべい'],['日本三大曳山祭に数えられるお祭りは？','秩父夜祭','祇園祭','高山祭','ねぶた祭'],['深谷市が生産量日本一を誇る野菜は？','ねぎ','たまねぎ','にんじん','じゃがいも'],['さいたま市にある交通系の巨大博物館は？','鉄道博物館','リニア・鉄道館','京都鉄道博物館','地下鉄博物館'],['新1万円札の顔となった深谷市出身の人物は？','渋沢栄一','福沢諭吉','津田梅子','北里柴三郎']]],
+      [12, '千葉県', 63, 16, [['県庁所在地は？','千葉市','船橋市','松戸市','市川市'],['生産量日本一の豆類といえば？','落花生','大豆','小豆','そら豆'],['日本の玄関口である国際空港は？','成田国際空港','羽田空港','関西国際空港','中部国際空港'],['太平洋に面した約66kmの砂浜海岸は？','九十九里浜','湘南海岸','鳥取砂丘','千里浜'],['千葉県の大部分を占める半島は？','房総半島','三浦半島','伊豆半島','紀伊半島'],['浦安市にある有名なテーマパークは？','ディズニーリゾート','USJ','ハウステンボス','富士急ハイランド']]],
+      [13, '東京都', 61, 16, [['都庁所在地は？','新宿区','渋谷区','千代田区','港区'],['高さ634mの日本一高い電波塔は？','スカイツリー','東京タワー','通天閣','福岡タワー'],['浅草寺の入り口にある有名な門は？','雷門','桜田門','半蔵門','羅生門'],['世界自然遺産に登録されている島々は？','小笠原諸島','伊豆諸島','千島列島','南西諸島'],['鉄板で小麦粉の生地と具を焼く郷土料理は？','もんじゃ焼き','お好み焼き','たこ焼き','チヂミ'],['徳川家康が開いた武家政権は？','江戸幕府','鎌倉幕府','室町幕府','明治新政府']]],
+      [14, '神奈川県', 60, 17, [['県庁所在地は？','横浜市','川崎市','相模原市','横須賀市'],['高徳院にある国宝の巨大な仏像は？','鎌倉大仏','奈良の大仏','牛久大仏','高岡大仏'],['箱根にある正月の駅伝で有名な湖は？','芦ノ湖','河口湖','山中湖','諏訪湖'],['日本最大の中華街がある都市は？','横浜市','神戸市','長崎市','大阪市'],['名物として知られる点心(豚肉の包み蒸し)は？','しゅうまい','餃子','肉まん','小籠包'],['観覧車や赤レンガ倉庫がある臨海エリアは？','みなとみらい','お台場','ハーバーランド','ベイサイドプレイス']]],
+      [15, '新潟県', 60, 13, [['県庁所在地は？','新潟市','長岡市','上越市','三条市'],['生産量日本一を誇る代表的な農作物は？','お米','小麦','とうもろこし','大豆'],['かつて金山で栄えた日本海最大の島は？','佐渡島','淡路島','小豆島','対馬'],['日本で一番長い川は？','信濃川','利根川','石狩川','天塩川'],['米菓として有名な三日月型のあられは？','柿の種','草加せんべい','ぬれせんべい','歌舞伎揚'],['特別天然記念物に指定されている鳥は？','トキ','コウノトリ','ライチョウ','タンチョウ']]],
+      [16, '富山県', 57, 16, [['県庁所在地は？','富山市','高岡市','射水市','南砺市'],['高さ日本一を誇る巨大なアーチ式ダムは？','黒部ダム','宮ヶ瀬ダム','八ッ場ダム','徳山ダム'],['春に青白く光ることで知られるイカは？','ホタルイカ','スルメイカ','ヤリイカ','ダイオウイカ'],['生産量日本一を誇る春の球根花は？','チューリップ','ヒマワリ','カーネーション','バラ'],['江戸時代から続く「配置販売」の文化は？','越中富山の薬売り','近江商人','伊勢商人','薩摩の薬売り'],['世界遺産に登録された急勾配の屋根の集落は？','五箇山の合掌造り','白川郷','大内宿','美山町']]],
+      [17, '石川県', 55, 17, [['県庁所在地は？','金沢市','白山市','小松市','加賀市'],['日本三名園の一つである金沢の庭園は？','兼六園','偕楽園','後楽園','栗林公園'],['色鮮やかな絵付けが特徴の伝統的な陶磁器は？','九谷焼','有田焼','備前焼','信楽焼'],['日本海に突き出た形の半島は？','能登半島','房総半島','伊豆半島','紀伊半島'],['江戸時代に金沢を治めた前田家の石高は？','加賀百万石','仙台六十二万石','薩摩七十七万石','長州三十六万石'],['高級魚として知られる「アカムツ」の別名は？','のどぐろ','きんき','クエ','トラフグ']]],
+      [18, '福井県', 55, 18, [['県庁所在地は？','福井市','坂井市','越前市','敦賀市'],['勝山市にある世界有数の博物館は？','恐竜博物館','鉄道博物館','国立科学博物館','宇宙博物館'],['冬の味覚として有名なブランドガニは？','越前ガニ','松葉ガニ','タラバガニ','毛ガニ'],['日本海の荒波が削り出した柱状の断崖絶壁は？','東尋坊','親不知','千畳敷','浄土ヶ浜'],['鯖江市が国内生産の9割を占める製品は？','メガネフレーム','万年筆','ランドセル','腕時計'],['リアス海岸が広がる県南部の湾は？','若狭湾','富山湾','駿河湾','相模湾']]],
+      [19, '山梨県', 59, 16, [['県庁所在地は？','甲府市','富士吉田市','甲斐市','南アルプス市'],['標高3,776mの日本一高い山は？','富士山','北岳','奥穂高岳','槍ヶ岳'],['生産量日本一の果物は？','ぶどう','りんご','みかん','いちご'],['平打ち麺を野菜と味噌で煮込んだ郷土料理は？','ほうとう','吉田のうどん','きしめん','ひっつみ'],['「風林火山」の旗印で知られる戦国武将は？','武田信玄','上杉謙信','徳川家康','織田信長'],['富士山の麓にある５つの湖の総称は？','富士五湖','三方五湖','裏磐梯三湖','知床五湖']]],
+      [20, '長野県', 58, 15, [['県庁所在地は？','長野市','松本市','上田市','飯田市'],['「牛に引かれて…」の言葉で有名な寺院は？','善光寺','清水寺','浅草寺','中尊寺'],['名物として知られる麺類は？','信州そば','讃岐うどん','きしめん','そうめん'],['飛騨・木曽・赤石の3つの山脈の総称は？','日本アルプス','奥羽山脈','日高山脈','鈴鹿山脈'],['川上村などで栽培が盛んな高原野菜は？','レタス','キャベツ','白菜','大根'],['避暑地として全国的に有名なリゾート地は？','軽井沢','那須','富良野','箱根']]],
+      [21, '岐阜県', 58, 17, [['県庁所在地は？','岐阜市','大垣市','各務原市','高山市'],['世界遺産に登録された合掌造りの集落は？','白川郷','五箇山','大内宿','妻籠宿'],['県内で育てられる有名な黒毛和牛は？','飛騨牛','松阪牛','神戸牛','近江牛'],['長良川で夏の夜に行われる伝統的な漁法は？','鵜飼','地引き網','一本釣り','定置網'],['「北アルプス」と呼ばれる山脈の正式名称は？','飛騨山脈','木曽山脈','赤石山脈','奥羽山脈'],['関市で生産が盛んな金属製品は？','刃物','洋食器','南部鉄器','銅器']]],
+      [22, '静岡県', 59, 18, [['県庁所在地は？','静岡市','浜松市','富士市','沼津市'],['生産量日本一を誇る飲み物は？','お茶','コーヒー','牛乳','リンゴジュース'],['うなぎの養殖で有名な県西部の湖は？','浜名湖','琵琶湖','霞ヶ浦','サロマ湖'],['山梨県と県境を接する日本一高い山は？','富士山','北岳','赤石岳','槍ヶ岳'],['浜名湖名物として知られる魚は？','うなぎ','マグロ','カツオ','サケ'],['浜松市が世界的なシェアを持つ楽器は？','ピアノ','ギター','バイオリン','トランペット']]],
+      [23, '愛知県', 58, 18, [['県庁所在地は？','名古屋市','豊田市','一宮市','岡崎市'],['屋根の上の金のシャチホコで有名なお城は？','名古屋城','大阪城','姫路城','熊本城'],['県内で最も盛んな製造業は？','自動車産業','造船業','鉄鋼業','電子部品'],['うなぎの蒲焼を細かく刻んでご飯に乗せた料理は？','ひつまぶし','うな重','うな丼','白焼き'],['名古屋城の屋根に乗っている架空の生き物は？','しゃちほこ','シーサー','狛犬','竜'],['豊田市に本社を置く世界的な自動車メーカーは？','トヨタ','ホンダ','日産','マツダ']]],
+      [24, '三重県', 57, 19, [['県庁所在地は？','津市','四日市市','伊勢市','鈴鹿市'],['天照大御神を祀る日本を代表する神社は？','伊勢神宮','出雲大社','明治神宮','伏見稲荷大社'],['日本三大和牛の一つとされる高級牛肉は？','松阪牛','神戸牛','米沢牛','近江牛'],['英虞湾などで養殖が盛んな宝石は？','真珠','サンゴ','琥珀','ヒスイ'],['F1日本グランプリが開催されるサーキットは？','鈴鹿サーキット','富士スピードウェイ','ツインリンクもてぎ','菅生'],['志摩半島に見られる複雑に入り組んだ海岸は？','リアス海岸','砂浜海岸','サンゴ礁','フィヨルド']]],
+      [25, '滋賀県', 56, 18, [['県庁所在地は？','大津市','草津市','長浜市','彦根市'],['県の面積の約6分の1を占める日本最大の湖は？','琵琶湖','霞ヶ浦','サロマ湖','猪苗代湖'],['タヌキの置物で有名な焼き物は？','信楽焼','備前焼','有田焼','九谷焼'],['彦根城の有名なゆるキャラは？','ひこにゃん','くまモン','ふなっしー','バリィさん'],['県内で育てられる有名な黒毛和牛は？','近江牛','松阪牛','神戸牛','飛騨牛'],['最澄が開いた天台宗の総本山・比叡山にあるお寺は？','延暦寺','金剛峯寺','東大寺','法隆寺']]],
+      [26, '京都府', 55, 19, [['府庁所在地は？','京都市','宇治市','亀岡市','舞鶴市'],['足利義満が建てた金箔張りの建物のお寺は？','金閣寺','銀閣寺','清水寺','平安神宮'],['「清水の舞台から飛び降りる」で有名なお寺は？','清水寺','金閣寺','東寺','南禅寺'],['ニッキの香りがする琴の形の和菓子は？','八ツ橋','もみじ饅頭','ういろう','カステラ'],['7月に1ヶ月間行われる日本三大祭りの一つは？','祇園祭','天神祭','神田祭','ねぶた祭'],['宇治市周辺で生産される有名なお茶は？','宇治茶','静岡茶','狭山茶','八女茶']]],
+      [27, '大阪府', 55, 20, [['府庁所在地は？','大阪市','堺市','東大阪市','豊中市'],['小麦粉の生地にタコを入れて丸く焼いた食べ物は？','たこ焼き','お好み焼き','明石焼き','もんじゃ焼き'],['豊臣秀吉が築いたお城は？','大阪城','名古屋城','姫路城','江戸城'],['新世界にある「天に通じる高い建物」という意味の塔は？','通天閣','東京タワー','京都タワー','神戸ポートタワー'],['大阪が本場とされる話芸文化は？','お笑い・漫才','歌舞伎','能・狂言','落語'],['堺市にある日本最大の前方後円墳は？','仁徳天皇陵','応神天皇陵','高松塚古墳','キトラ古墳']]],
+      [28, '兵庫県', 53, 20, [['県庁所在地は？','神戸市','姫路市','西宮市','尼崎市'],['白鷺城とも呼ばれる世界遺産のお城は？','姫路城','大阪城','松本城','彦根城'],['世界的に有名なブランド牛肉は？','神戸牛','松阪牛','近江牛','米沢牛'],['女性だけで構成される有名なミュージカル劇団は？','宝塚歌劇団','劇団四季','OSK日本歌劇団','わらび座'],['本州と淡路島を結ぶ世界最長クラスの吊り橋は？','明石海峡大橋','瀬戸大橋','しまなみ海道','レインボーブリッジ'],['高校野球の全国大会が行われる球場は？','甲子園球場','東京ドーム','神宮球場','福岡PayPayドーム']]],
+      [29, '奈良県', 56, 20, [['県庁所在地は？','奈良市','橿原市','生駒市','大和郡山市'],['大仏で有名な世界遺産のお寺は？','東大寺','法隆寺','興福寺','薬師寺'],['奈良公園にたくさんいて、神の使いとされる動物は？','鹿','猿','キツネ','ウサギ'],['春には桜が山全体を覆う名所は？','吉野山','嵐山','高尾山','富士山'],['聖徳太子が建てた世界最古の木造建築のお寺は？','法隆寺','東大寺','唐招提寺','飛鳥寺'],['塩漬けの鯖などを柿の葉で包んだお寿司は？','柿の葉寿司','ます寿司','なれずし','ばってら']]],
+      [30, '和歌山県', 54, 21, [['県庁所在地は？','和歌山市','田辺市','橋本市','紀の川市'],['生産量日本一を誇る柑橘類は？','みかん','りんご','もも','ぶどう'],['空海（弘法大師）が開いた真言宗の総本山は？','高野山','比叡山','恐山','身延山'],['世界遺産「紀伊山地の霊場と参詣道」がある山地は？','紀伊山地','飛騨山脈','奥羽山脈','四国山地'],['南高梅などで知られる生産量日本一の果実は？','梅','柿','梨','キウイ'],['パンダの飼育数で日本一のテーマパークは？','アドベンチャーワールド','上野動物園','東山動植物園','旭山動物園']]],
+      [31, '鳥取県', 51, 21, [['県庁所在地は？','鳥取市','米子市','倉吉市','境港市'],['日本最大級の起伏を持つ海岸砂丘は？','鳥取砂丘','中田島砂丘','吹上浜','九十九里浜'],['「二十世紀」などの品種で知られる特産果物は？','梨','りんご','もも','ぶどう'],['境港市出身の作者が描いた妖怪の漫画は？','ゲゲゲの鬼太郎','名探偵コナン','ドラえもん','ワンピース'],['冬の味覚として有名なブランドガニは？','松葉ガニ','越前ガニ','タラバガニ','毛ガニ'],['砂丘の横で栽培される特産の野菜は？','らっきょう','ねぎ','たまねぎ','にんにく']]],
+      [32, '島根県', 48, 22, [['県庁所在地は？','松江市','出雲市','浜田市','益田市'],['縁結びの神様として有名な神社は？','出雲大社','伊勢神宮','厳島神社','伏見稲荷大社'],['宍道湖でよく採れる特産の貝は？','しじみ','あさり','はまぐり','ホタテ'],['世界遺産に登録されたかつて日本最大の銀山は？','石見銀山','生野銀山','佐渡金山','別子銅山'],['島根半島の北の日本海に浮かぶ島々は？','隠岐諸島','五島列島','小笠原諸島','奄美群島'],['割子という丸い漆器に盛って食べる郷土料理は？','出雲そば','わんこそば','戸隠そば','信州そば']]],
+      [33, '岡山県', 50, 23, [['県庁所在地は？','岡山市','倉敷市','津山市','総社市'],['きびだんごを持ってお供を連れた昔話の主人公は？','桃太郎','金太郎','浦島太郎','一寸法師'],['「マスカット・オブ・アレキサンドリア」といえば何の果物？','ぶどう','もも','メロン','いちご'],['本州と四国を鉄道と道路で結ぶ橋は？','瀬戸大橋','明石海峡大橋','しまなみ海道','関門橋'],['日本三名園の一つである岡山の庭園は？','後楽園','兼六園','偕楽園','栗林公園'],['白壁の蔵屋敷が立ち並ぶ倉敷市の観光地は？','美観地区','ひがし茶屋街','祇園','角館']]],
+      [34, '広島県', 48, 24, [['県庁所在地は？','広島市','福山市','呉市','東広島市'],['海の中に立つ赤い大鳥居で有名な世界遺産の神社は？','厳島神社','出雲大社','伏見稲荷大社','春日大社'],['もみじの葉の形をしたカステラ生地の和菓子は？','もみじ饅頭','八ツ橋','ういろう','きびだんご'],['生地・キャベツ・麺などを重ねて焼く粉ものは？','お好み焼き','たこ焼き','もんじゃ焼き','チヂミ'],['生産量日本一を誇る海のミルクと呼ばれる貝は？','牡蠣','ホタテ','アワビ','サザエ'],['平和への願いを込めて保存されている世界遺産は？','原爆ドーム','平和祈念像','ひめゆりの塔','知覧特攻平和会館']]],
+      [35, '山口県', 44, 25, [['県庁所在地は？','山口市','下関市','宇部市','周南市'],['毒を持つが高級魚として知られ、下関で水揚げされる魚は？','ふぐ','タイ','ヒラメ','アンコウ'],['日本最大級のカルスト台地・秋吉台の地下にある鍾乳洞は？','秋芳洞','龍泉洞','玉泉洞','あぶくま洞'],['岩国市にある木造の5連アーチ橋は？','錦帯橋','眼鏡橋','かずら橋','日本橋'],['幕末に松下村塾を開き、多くの志士を育てた人物は？','吉田松陰','坂本龍馬','西郷隆盛','高杉晋作'],['関門海峡に面した山口県最大の都市は？','下関市','山口市','宇部市','岩国市']]],
+      [36, '徳島県', 49, 29, [['県庁所在地は？','徳島市','阿南市','鳴門市','吉野川市'],['「踊る阿呆に見る阿呆」の掛け声で有名な夏祭りは？','阿波おどり','よさこい祭り','ねぶた祭','祇園祭'],['鳴門海峡で発生する激しい潮流現象は？','鳴門の渦潮','関門の渦潮','津軽の渦潮','玄界灘の渦潮'],['徳島県特産の、香りが良く酸味が強い柑橘類は？','すだち','かぼす','ゆず','シークワーサー'],['弘法大師ゆかりの88の寺院を巡る巡礼を何という？','四国八十八ヶ所','西国三十三所','秩父三十四箇所','坂東三十三箇所'],['「四国三郎」の異名を持つ四国一の大河は？','吉野川','四万十川','仁淀川','物部川']]],
+      [37, '香川県', 48, 28, [['県庁所在地は？','高松市','丸亀市','三豊市','観音寺市'],['消費量日本一で、別名「うどん県」と呼ばれる理由は？','うどん','そば','ラーメン','そうめん'],['オリーブの栽培で有名な瀬戸内海で2番目に大きな島は？','小豆島','淡路島','直島','大三島'],['香川県特産の、平和の象徴とされる植物は？','オリーブ','みかん','レモン','すだち'],['「こんぴらさん」の愛称で親しまれる長い石段のある神社は？','金刀比羅宮','厳島神社','出雲大社','伏見稲荷大社'],['丸亀市が全国シェアの多くを占める伝統工芸品は？','うちわ','扇子','和傘','提灯']]],
+      [38, '愛媛県', 47, 29, [['県庁所在地は？','松山市','今治市','今治市','西条市'],['生産量全国トップクラスの柑橘類は？','みかん','りんご','もも','ぶどう'],['夏目漱石の小説「坊っちゃん」の舞台となった温泉は？','道後温泉','有馬温泉','草津温泉','別府温泉'],['今治市が生産量日本一を誇る綿製品は？','タオル','デニム','シルク','帆布'],['広島県と愛媛県の島々を橋で結ぶ道路は？','しまなみ海道','瀬戸大橋','明石海峡大橋','アクアライン'],['小説「坊っちゃん」の作者は？','夏目漱石','森鴎外','芥川龍之介','太宰治']]],
+      [39, '高知県', 48, 30, [['県庁所在地は？','高知市','南国市','四万十市','香南市'],['幕末に薩長同盟の成立に尽力した土佐藩出身の人物は？','坂本龍馬','西郷隆盛','吉田松陰','木戸孝允'],['表面を火で炙って薬味と一緒に食べるカツオの郷土料理は？','カツオのたたき','マグロの解体ショー','鯛めし','ブリの照り焼き'],['「日本最後の清流」と呼ばれる川は？','四万十川','吉野川','仁淀川','長良川'],['鳴子を持って踊る夏のお祭りは？','よさこい祭り','阿波おどり','よさこいソーラン','エイサー'],['高知県が生産量日本一を誇る柑橘類は？','ゆず','すだち','かぼす','みかん']]],
+      [40, '福岡県', 42, 28, [['県庁所在地は？','福岡市','北九州市','久留米市','飯塚市'],['スケトウダラの卵巣を唐辛子などで漬け込んだ特産品は？','明太子','筋子','数の子','キャビア'],['菅原道真を祀り、学問の神様として有名な神社は？','太宰府天満宮','北野天満宮','湯島天満宮','防府天満宮'],['豚骨スープと細いストレート麺が特徴のラーメンは？','博多ラーメン','札幌ラーメン','喜多方ラーメン','和歌山ラーメン'],['夜になると街中に並ぶ、食事を提供する移動式の店は？','屋台','キッチンカー','ドライブスルー','フードコート'],['ゴールデンウィークに開催される動員数日本一のお祭りは？','博多どんたく','博多祇園山笠','唐津くんち','長崎くんち']]],
+      [41, '佐賀県', 41, 29, [['県庁所在地は？','佐賀市','唐津市','鳥栖市','伊万里市'],['弥生時代の環濠集落跡として有名な遺跡は？','吉野ヶ里遺跡','三内丸山遺跡','登呂遺跡','大森貝塚'],['伊万里焼とも呼ばれる、日本で初めて焼かれた磁器は？','有田焼','九谷焼','備前焼','信楽焼'],['有明海の干潟に生息し、泥の上を跳ねる魚は？','ムツゴロウ','ワラスボ','ハゼ','カレイ'],['県内で育てられる有名な黒毛和牛は？','佐賀牛','松阪牛','神戸牛','近江牛'],['呼子（よぶこ）町で有名な海産物は？','イカ','タコ','カニ','エビ']]],
+      [42, '長崎県', 41, 30, [['県庁所在地は？','長崎市','佐世保市','諫早市','大村市'],['南蛮貿易で伝わった、卵と砂糖を使ったスポンジケーキは？','カステラ','バウムクーヘン','マカロン','エクレア'],['幕末に多くの西洋人が住んだ洋風建築が残る観光地は？','グラバー園','異人館街','横浜中華街','出島'],['オランダの街並みを再現した佐世保市のテーマパークは？','ハウステンボス','ディズニーランド','USJ','志摩スペイン村'],['原爆落下の中心地近くに建てられた平和を象徴する像は？','平和祈念像','自由の女神像','クラーク像','西郷隆盛像'],['豚骨・鶏ガラスープに太麺とたっぷりの具材を入れた麺料理は？','ちゃんぽん','ラーメン','うどん','パスタ']]],
+      [43, '熊本県', 43, 29, [['県庁所在地は？','熊本市','八代市','天草市','玉名市'],['加藤清正が築いた、黒と白のコントラストが美しいお城は？','熊本城','大阪城','姫路城','名古屋城'],['世界最大級のカルデラを持つ活火山は？','阿蘇山','桜島','富士山','雲仙岳'],['赤いほっぺが特徴の熊本県の有名なPRキャラクターは？','くまモン','ひこにゃん','ふなっしー','せんとくん'],['熊本名物として知られる肉料理は？','馬刺し','牛タン','ジンギスカン','地鶏の炭火焼き'],['熊本県が生産量日本一を誇る夏の果実（野菜）は？','スイカ','メロン','いちご','マンゴー']]],
+      [44, '大分県', 44, 28, [['県庁所在地は？','大分市','別府市','中津市','日田市'],['源泉数・湧出量ともに日本一の温泉都市は？','別府温泉','草津温泉','有馬温泉','下呂温泉'],['大分県が生産量日本一を誇る柑橘類は？','かぼす','すだち','ゆず','シークワーサー'],['鶏肉に衣をつけて揚げた大分県の郷土料理は？','とり天','唐揚げ','チキン南蛮','フライドチキン'],['由布岳の麓に広がる、女性に人気の温泉地は？','湯布院','黒川温泉','道後温泉','城崎温泉'],['様々な色の温泉を巡る別府の観光の定番は？','地獄めぐり','湯めぐり','外湯めぐり','砂湯めぐり']]],
+      [45, '宮崎県', 43, 30, [['県庁所在地は？','宮崎市','都城市','延岡市','日向市'],['揚げた鶏肉に甘酢とタルタルソースをかけた料理は？','チキン南蛮','とり天','唐揚げ','油淋鶏'],['「太陽のタマゴ」などのブランドで知られる南国の果物的存在は？','マンゴー','パイナップル','バナナ','パパイヤ'],['阿蘇の火山活動でできた渓谷で、ボート下りが有名なのは？','高千穂峡','耶馬渓','瀞峡','黒部峡谷'],['サンメッセ日南にある、イースター島公認の石像は？','モアイ像','スフィンクス','マーライオン','自由の女神像'],['宮崎県原産の、黄色くてさっぱりした甘さの柑橘類は？','日向夏','みかん','いよかん','デコポン']]],
+      [46, '鹿児島県', 42, 31, [['県庁所在地は？','鹿児島市','霧島市','鹿屋市','薩摩川内市'],['鹿児島湾（錦江湾）に浮かぶ、現在も活動を続ける活火山は？','桜島','阿蘇山','雲仙岳','浅間山'],['鹿児島特産の、六白と呼ばれる豚の品種は？','黒豚','イベリコ豚','アグー豚','金華豚'],['明治維新の立役者で、上野公園に銅像がある人物は？','西郷隆盛','大久保利通','坂本龍馬','木戸孝允'],['別名「唐芋（からいも）」とも呼ばれる特産のイモ類は？','さつまいも','じゃがいも','さといも','やまいも'],['樹齢数千年の縄文杉がある世界自然遺産の島は？','屋久島','種子島','奄美大島','徳之島']]],
+      [47, '沖縄県', 9, 36, [['県庁所在地は？','那覇市','沖縄市','うるま市','浦添市'],['琉球王国の政治・外交・文化の中心だった世界遺産のお城は？','首里城','中城城','今帰仁城','座喜味城'],['苦味のある野菜と豆腐、豚肉などを炒めた郷土料理は？','ゴーヤチャンプルー','ラフテー','ソーキそば','海ぶどう'],['家の屋根などに置かれる、魔除けの獅子の像は？','シーサー','狛犬','シャチホコ','シーラカンス'],['巨大なジンベエザメが泳ぐ大水槽で有名な水族館は？','美ら海水族館','海遊館','八景島シーパラダイス','鳥羽水族館'],['かつて沖縄に存在した独立国家は？','琉球王国','大和朝廷','蝦夷島政府','邪馬台国']]]
     ];
+
+    const prefecturesData = prefRawData.map(d => {
+      const monsterType = d[0] % 3 === 0 ? 'dragon' : (d[0] % 3 === 1 ? 'slime' : 'ghost');
+      return {
+        id: d[0], name: d[1], x: d[2], y: d[3], monster: monsterType,
+        quizzes: d[4].map(q => ({ text: q[0], correct: q[1], options: [...q.slice(1)].sort(() => Math.random() - 0.5) }))
+      };
+    });
 
     const mapLayout = [
       "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
-      "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~..^*~~~~~~",
+      "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~.^^^*~~~~~~",
       "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~.^^***.~~~~~",
       "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~..*^^^..~~~~~",
       "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~.^^^^*..~~~~~",
-      "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~===~~~~~~~~~~~~~",
+      "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~..^^*~~~~~~~~",
+      "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~=~~~~~~~~~~~~",
       "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~..*~~~~~~~~~~~~",
       "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~.^^.~~~~~~~~~~~~",
       "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*^^..~~~~~~~~~~~~",
@@ -355,171 +317,556 @@
       "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
     ];
 
+    const TileMap = {
+      '~': { bg: '#0040A0', icon: null },
+      '.': { bg: '#00A000', icon: null },
+      '^': { bg: '#D8A038', icon: 'mountain' },
+      '*': { bg: '#006000', icon: 'tree' },
+      '=': { bg: '#E57300', icon: null } 
+    };
+
     // ==========================================
-    // 5. アプリケーション本体
+    // 4. UIコンポーネント
+    // ==========================================
+
+    // ★ドラクエ風 アーチ状タイトルロゴ (完全に一つのかたまりとして描画)
+    function DqTitleLogo() {
+      return (
+        <svg viewBox="0 0 800 360" className="w-full h-full max-w-2xl mx-auto drop-shadow-[0_15px_25px_rgba(0,0,0,0.9)]" style={{ maxHeight: '100%' }}>
+          <defs>
+            <linearGradient id="dqGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#ffea00"/>
+              <stop offset="50%" stopColor="#ff5500"/>
+              <stop offset="100%" stopColor="#ff0000"/>
+            </linearGradient>
+            
+            {/* 一体感のある極厚の二重縁取りフィルター */}
+            <filter id="outline">
+              <feMorphology in="SourceAlpha" result="DILATED" operator="dilate" radius="6"></feMorphology>
+              <feFlood floodColor="#000" in="DILATED" result="BLACK"></feFlood>
+              <feComposite in="BLACK" in2="DILATED" operator="in" result="OUTLINE_B"></feComposite>
+
+              <feMorphology in="SourceAlpha" result="DILATED2" operator="dilate" radius="3"></feMorphology>
+              <feFlood floodColor="#fff" in="DILATED2" result="WHITE"></feFlood>
+              <feComposite in="WHITE" in2="DILATED2" operator="in" result="OUTLINE_W"></feComposite>
+
+              <feMerge>
+                <feMergeNode in="OUTLINE_B" />
+                <feMergeNode in="OUTLINE_W" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* 全てを filter の中に入れて一つのかたまりにする */}
+          <g filter="url(#outline)">
+            
+            {/* --- テキストグループ --- */}
+            <g fontFamily="'DotGothic16', monospace" fontSize="85" fontWeight="bold" textAnchor="middle" fill="url(#dqGrad)">
+              
+              {/* JAPAN (上段) */}
+              <g transform="translate(140, 130) scale(1.3, 2.2) skewY(15)">
+                <text dominantBaseline="central">J</text>
+                {/* Jに横たわる日本列島のシルエット */}
+                <g transform="translate(-10, 0) scale(0.3) rotate(35)" fill="#1a1a1a">
+                  <polygon points="50,10 70,5 90,15 110,15 120,30 90,40 70,45 50,30 40,20" />
+                  <polygon points="40,50 30,70 0,100 -30,110 -60,130 -80,140 -85,150 -60,150 -30,130 10,120 40,110 50,80 60,60" />
+                  <polygon points="-40,145 -15,150 -20,165 -45,155" />
+                  <polygon points="-65,160 -45,165 -40,185 -50,200 -70,180" />
+                </g>
+              </g>
+              <text transform="translate(260, 130) scale(1.3, 1.5) skewY(8)" dominantBaseline="central">A</text>
+              <text transform="translate(380, 130) scale(1.3, 1.0) skewY(0)" dominantBaseline="central">P</text>
+              <text transform="translate(500, 130) scale(1.3, 1.5) skewY(-8)" dominantBaseline="central">A</text>
+              <text transform="translate(620, 130) scale(1.3, 2.2) skewY(-15)" dominantBaseline="central">N</text>
+
+              {/* QUES (下段) */}
+              <text transform="translate(160, 240) scale(1.3, 2.2) skewY(-15)" dominantBaseline="central">Q</text>
+              <text transform="translate(280, 240) scale(1.3, 1.5) skewY(-8)" dominantBaseline="central">U</text>
+              <text transform="translate(400, 240) scale(1.3, 1.0) skewY(0)" dominantBaseline="central">E</text>
+              <text transform="translate(520, 240) scale(1.3, 1.5) skewY(8)" dominantBaseline="central">S</text>
+            </g>
+
+            {/* --- Tの代わりの剣 --- */}
+            {/* 剣全体にも同じパース(skewとscale)をかけてTの文字として馴染ませる */}
+            <g transform="translate(640, 240) scale(1.3, 2.2) skewY(15)">
+              <polygon points="-8,-40 0,-60 8,-40 5,20 -5,20" fill="#e0e0e0" />
+              <polygon points="0,-60 8,-40 5,20 0,20" fill="#ffffff" />
+              {/* 鍔 */}
+              <polygon points="-35,15 35,15 30,25 -30,25" fill="#3b82f6" />
+              <circle cx="0" cy="20" r="8" fill="#ef4444" />
+              {/* 柄 */}
+              <rect x="-6" y="25" width="12" height="25" fill="#b91c1c" />
+              {/* 柄頭 */}
+              <circle cx="0" cy="52" r="8" fill="#fbbf24" />
+            </g>
+
+          </g>
+        </svg>
+      );
+    }
+
+    function TypewriterMessage({ text, onComplete }) {
+      const [disp, setDisp] = useState("");
+      const onCompleteRef = useRef(onComplete);
+
+      useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+
+      useEffect(() => {
+        setDisp("");
+        let i = 0; let currentText = "";
+        const timer = setInterval(() => {
+          if (i < text.length) {
+            currentText += text.charAt(i);
+            setDisp(currentText);
+            i++;
+          } else {
+            clearInterval(timer);
+            if (onCompleteRef.current) onCompleteRef.current();
+          }
+        }, 40);
+        return () => clearInterval(timer);
+      }, [text]);
+
+      return <span style={{whiteSpace: "pre-wrap"}} className="word-break-all">{disp}</span>;
+    }
+
+    // ==========================================
+    // 5. ゲームパッド (画面下部固定コントローラー)
+    // ==========================================
+    const VirtualController = () => {
+      const sim = (key) => window.dispatchEvent(new KeyboardEvent('keydown', { key }));
+      return (
+        <div className="w-full h-32 sm:h-36 bg-[#111] border-t-4 border-[#333] flex justify-between items-center px-4 sm:px-12 shrink-0 select-none shadow-[inset_0_10px_20px_rgba(0,0,0,0.5)]">
+          <div className="grid grid-cols-3 gap-1 w-24 h-24 sm:w-28 sm:h-28">
+            <div />
+            <button className="bg-gray-700 rounded-lg shadow-[0_4px_0_#444] active:shadow-[0_0px_0_#444] active:translate-y-1 flex justify-center items-center text-white text-xl sm:text-2xl" onPointerDown={(e)=>{e.preventDefault(); sim('ArrowUp')}}>▲</button>
+            <div />
+            <button className="bg-gray-700 rounded-lg shadow-[0_4px_0_#444] active:shadow-[0_0px_0_#444] active:translate-y-1 flex justify-center items-center text-white text-xl sm:text-2xl" onPointerDown={(e)=>{e.preventDefault(); sim('ArrowLeft')}}>◀</button>
+            <div className="bg-gray-800 rounded-full w-6 h-6 sm:w-8 sm:h-8 place-self-center"></div>
+            <button className="bg-gray-700 rounded-lg shadow-[0_4px_0_#444] active:shadow-[0_0px_0_#444] active:translate-y-1 flex justify-center items-center text-white text-xl sm:text-2xl" onPointerDown={(e)=>{e.preventDefault(); sim('ArrowRight')}}>▶</button>
+            <div />
+            <button className="bg-gray-700 rounded-lg shadow-[0_4px_0_#444] active:shadow-[0_0px_0_#444] active:translate-y-1 flex justify-center items-center text-white text-xl sm:text-2xl" onPointerDown={(e)=>{e.preventDefault(); sim('ArrowDown')}}>▼</button>
+            <div />
+          </div>
+          <div className="flex gap-4 sm:gap-6 items-end h-full pb-4 sm:pb-6">
+            <div className="flex flex-col items-center">
+              <button className="bg-blue-700 w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-[0_6px_0_#003380] active:shadow-[0_0px_0_#003380] active:translate-y-[6px] text-white font-bold text-xl sm:text-2xl" onPointerDown={(e)=>{e.preventDefault(); sim('Escape')}}>B</button>
+              <span className="text-gray-400 text-xs mt-1 font-sans font-bold">CANCEL</span>
+            </div>
+            <div className="flex flex-col items-center mb-4 sm:mb-6">
+              <button className="bg-red-700 w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-[0_6px_0_#800000] active:shadow-[0_0px_0_#800000] active:translate-y-[6px] text-white font-bold text-xl sm:text-2xl" onPointerDown={(e)=>{e.preventDefault(); sim('Enter')}}>A</button>
+              <span className="text-gray-400 text-xs mt-1 font-sans font-bold">DECIDE</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 6. 各画面コンポーネント
+    // ==========================================
+    function TitleScreen({ onNewGame, onLoadGame }) {
+      const [cursor, setCursor] = useState(0); 
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'w' || e.key === 's') {
+            playSE('cursor'); setCursor(c => (c === 0 ? 1 : 0));
+          } else if (e.key === 'Enter' || e.key === ' ') {
+            playSE('decide'); if (cursor === 0) onNewGame(); else onLoadGame();
+          }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [cursor, onNewGame, onLoadGame]);
+
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center bg-[#2b4c7e] relative p-4 min-h-0 overflow-hidden">
+          <div className="w-full flex-1 flex items-center justify-center min-h-0 mb-4 sm:mb-8">
+            <DqTitleLogo />
+          </div>
+          <div className="dq-window px-8 py-6 sm:px-12 sm:py-8 flex flex-col gap-4 sm:gap-6 text-lg sm:text-2xl shrink-0 shadow-2xl mb-2 sm:mb-4">
+            <div className="relative cursor-pointer" onPointerDown={() => { setCursor(0); playSE('decide'); onNewGame(); }}>
+              <span className="absolute -left-6 sm:-left-8 text-yellow-400">{cursor === 0 ? '▶' : '　'}</span>さいしょから
+            </div>
+            <div className="relative cursor-pointer" onPointerDown={() => { setCursor(1); playSE('decide'); onLoadGame(); }}>
+              <span className="absolute -left-6 sm:-left-8 text-yellow-400">{cursor === 1 ? '▶' : '　'}</span>ふっかつのじゅもん
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function BattleScreen({ pref, onWin, onEscape, heroStats, setHeroStats }) {
+      const [quizzes, setQuizzes] = useState([]);
+      const [qIdx, setQIdx] = useState(0); 
+      const [eHp, setEHp] = useState(3); 
+      const [phase, setPhase] = useState('APPEAR'); 
+      const [msg, setMsg] = useState("");
+      const [typingDone, setTypingDone] = useState(false);
+      const [cursor, setCursor] = useState(0);
+
+      useEffect(() => {
+        setQuizzes([...pref.quizzes].sort(() => 0.5 - Math.random()));
+        setMsg(`${pref.name} が あらわれた！\n（3もん せいかいで クリア！）`);
+        setTypingDone(false); setPhase('APPEAR');
+      }, [pref]);
+
+      const handleKeyDown = useCallback((e) => {
+        if (!typingDone) return;
+        if (phase === 'COMMAND') {
+          if (e.key === 'ArrowUp') { playSE('cursor'); setCursor(c => c > 1 ? c - 2 : c); }
+          else if (e.key === 'ArrowDown') { playSE('cursor'); setCursor(c => c < 2 ? c + 2 : c); }
+          else if (e.key === 'ArrowLeft') { playSE('cursor'); setCursor(c => c % 2 === 1 ? c - 1 : c); }
+          else if (e.key === 'ArrowRight') { playSE('cursor'); setCursor(c => c % 2 === 0 ? c + 1 : c); }
+          else if (e.key === 'Enter' || e.key === ' ') {
+            playSE('decide');
+            if (cursor === 0) { 
+              setPhase('QUESTION'); setMsg(`${heroStats.name}の こうげき！\n\n${quizzes[qIdx % quizzes.length].text}`); setTypingDone(false); 
+            }
+            else if (cursor === 1) { setMsg(`しかし じゅもんが つかえない！`); setTypingDone(false); setPhase('RESULT_BACK'); }
+            else if (cursor === 2) {
+              const success = Math.random() > 0.3;
+              if (success) { playSE('escape'); setMsg(`${heroStats.name} は にげだした！`); setTypingDone(false); setPhase('ESCAPE'); } 
+              else { 
+                setHeroStats(p => ({...p, hp: p.hp - 1})); 
+                setMsg(`${heroStats.name} は にげだした！\nしかし まわりこまれてしまった！\n1の ダメージ！`); 
+                setTypingDone(false); setPhase('ENEMY_TURN'); 
+              }
+            }
+            else if (cursor === 3) { setMsg(`しかし なにも もっていない！`); setTypingDone(false); setPhase('RESULT_BACK'); }
+          }
+        } else if (phase === 'SELECTING') {
+          const opts = quizzes[qIdx % quizzes.length].options;
+          if (e.key === 'ArrowUp') { playSE('cursor'); setCursor(c => (c > 0 ? c - 1 : opts.length - 1)); }
+          else if (e.key === 'ArrowDown') { playSE('cursor'); setCursor(c => (c < opts.length - 1 ? c + 1 : 0)); }
+          else if (e.key === 'Enter' || e.key === ' ') {
+            playSE('decide');
+            const isCorrect = opts[cursor] === quizzes[qIdx % quizzes.length].correct;
+            if (isCorrect) {
+              playSE('attack'); setTimeout(() => playSE('correct'), 200);
+              const newEHp = eHp - 1; setEHp(newEHp);
+              if (newEHp <= 0) { setMsg(`せいかい！\n${pref.name} を やつけけた！`); setTypingDone(false); setPhase('RESULT_WIN'); } 
+              else { setMsg(`せいかい！\n${pref.name} に 1の ダメージ！\n（あと ${newEHp}かい！）`); setTypingDone(false); setPhase('RESULT_BACK'); }
+            } else {
+              playSE('damage'); setHeroStats(p => ({...p, hp: p.hp - 1}));
+              setMsg(`ミス！\n${heroStats.name} は 1の ダメージを うけた！\n(せいかい:${quizzes[qIdx % quizzes.length].correct})`);
+              setTypingDone(false); setPhase('ENEMY_TURN');
+            }
+          }
+        } else if (phase === 'APPEAR' || phase === 'RESULT_BACK') {
+          if (e.key === 'Enter' || e.key === ' ') { 
+            if (phase === 'RESULT_BACK') setQIdx(i => i + 1); 
+            playSE('cursor'); setPhase('COMMAND'); setCursor(0); 
+          }
+        } else if (phase === 'QUESTION') {
+          if (e.key === 'Enter' || e.key === ' ') { playSE('cursor'); setPhase('SELECTING'); setCursor(0); }
+        } else if (phase === 'RESULT_WIN') {
+          if (e.key === 'Enter' || e.key === ' ') {
+            stopBGM(); playSE('win');
+            const expGain = 5; let nLv = heroStats.level, nMax = heroStats.maxHp; let lvUpStr = "";
+            if (heroStats.exp + expGain >= nLv * 10) { nLv++; nMax+=2; lvUpStr = `\n${heroStats.name} は レベル${nLv} に あがった！`; setTimeout(()=>playSE('levelup'), 600); }
+            setHeroStats(p => ({...p, exp: p.exp + expGain, level: nLv, maxHp: nMax, hp: nMax}));
+            setMsg(`${expGain}ポイントの けいけんちを かくとく！${lvUpStr}`);
+            setTypingDone(false); setPhase('END_WIN');
+          }
+        } else if (phase === 'ENEMY_TURN') {
+          if (e.key === 'Enter' || e.key === ' ') {
+            if (heroStats.hp <= 0) { stopBGM(); playSE('damage'); setMsg(`ゆうしゃ は しんでしまった...`); setTypingDone(false); setPhase('END_LOSE'); } 
+            else { setQIdx(i => i + 1); playSE('cursor'); setPhase('COMMAND'); setCursor(0); }
+          }
+        } else if (phase === 'ESCAPE') { if (e.key === 'Enter' || e.key === ' ') onEscape(); } 
+        else if (phase === 'END_WIN') { if (e.key === 'Enter' || e.key === ' ') onWin(pref.id); } 
+        else if (phase === 'END_LOSE') { if (e.key === 'Enter' || e.key === ' ') window.location.reload(); }
+      }, [phase, typingDone, cursor, heroStats, quizzes, qIdx, pref, eHp]);
+
+      useEffect(() => { window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown); }, [handleKeyDown]);
+
+      return (
+        <div className="absolute inset-0 bg-black z-40 flex flex-col p-2 sm:p-4 min-h-0">
+          <div className="flex-1 flex flex-col items-center justify-center min-h-0">
+             <PixelArt name={pref.monster} size={140} className={eHp<=0 && phase==='END_WIN'?'hidden':''} />
+          </div>
+          <div className="flex gap-2 h-40 sm:h-48 mt-auto shrink-0">
+            {(phase === 'COMMAND' || phase === 'SELECTING') && (
+              <div className="dq-window p-2 sm:p-4 w-5/12 sm:w-1/3 flex flex-col text-sm sm:text-lg leading-relaxed overflow-y-auto">
+                {phase === 'COMMAND' ? (
+                  <div className="grid grid-cols-2 gap-x-1 gap-y-4 h-full content-start mt-2">
+                    <div>{cursor===0&&<span className="text-yellow-400">▶</span>}たたかう</div><div>{cursor===1&&<span className="text-yellow-400">▶</span>}じゅもん</div>
+                    <div>{cursor===2&&<span className="text-yellow-400">▶</span>}にげる</div>  <div>{cursor===3&&<span className="text-yellow-400">▶</span>}どうぐ</div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:gap-3 overflow-y-auto pr-1">
+                    {quizzes[qIdx % quizzes.length].options.map((opt, i) => (
+                      <div key={i} className="flex"><span className="w-4 shrink-0">{cursor===i&&<span className="text-yellow-400">▶</span>}</span><span className="word-break-all">{opt}</span></div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className={`dq-window p-3 sm:p-4 text-sm sm:text-lg leading-relaxed relative overflow-y-auto ${phase==='COMMAND'||phase==='SELECTING' ? 'flex-1' : 'w-full'}`}>
+              <TypewriterMessage text={msg} onComplete={() => setTypingDone(true)} />
+              {typingDone && phase !== 'COMMAND' && phase !== 'SELECTING' && <div className="absolute bottom-2 right-4 animate-blink text-yellow-400">▼</div>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 7. メイン App
     // ==========================================
     function App() {
+      const [gameState, setGameState] = useState('START'); 
+      const [fb, setFb] = useState(null);
       const [user, setUser] = useState(null);
-      const [audioStarted, setAudioStarted] = useState(false);
-      const [gameState, setGameState] = useState('TITLE'); 
-      const [heroName, setHeroName] = useState("");
+      
+      const [heroStats, setHeroStats] = useState({ name: "", level: 1, hp: 15, maxHp: 15, exp: 0, gold: 0 });
       const [playerPos, setPlayerPos] = useState({ x: 61, y: 16 });
       const [clearedPrefs, setClearedPrefs] = useState([]); 
       const [saves, setSaves] = useState([]);
+      
       const [encounterPref, setEncounterPref] = useState(null);
+      const [battlePref, setBattlePref] = useState(null);
+      
+      const [menuOpen, setMenuOpen] = useState(false);
+      const [menuCursor, setMenuCursor] = useState(0);
+      const [msg, setMsg] = useState("");
       const [savePhase, setSavePhase] = useState(0);
 
-      const fb = window.JQ_FB;
-
-      // Auth初期化
       useEffect(() => {
-        const init = async () => {
-          await window.JQ_AUTH_INIT();
-          fb.auth.onAuthStateChanged(setUser);
+        const initFb = async () => {
+          try {
+            const appModule = await new Function("return import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js')")();
+            const authModule = await new Function("return import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js')")();
+            const fsModule = await new Function("return import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js')")();
+            const fns = { ...appModule, ...authModule, ...fsModule };
+            const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            if (config) {
+              const app = fns.initializeApp(config); const auth = fns.getAuth(app); const db = fns.getFirestore(app);
+              setFb({ auth, db, fns });
+              if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await fns.signInWithCustomToken(auth, __initial_auth_token);
+              else await fns.signInAnonymously(auth);
+              fns.onAuthStateChanged(auth, setUser);
+            }
+          } catch (e) { console.error("Firebase init err:", e); }
         };
-        init();
+        initFb();
       }, []);
 
-      // セーブデータ取得
       const fetchSaves = async () => {
-        if (!user) return;
-        const colRef = fb.firestore.collection(fb.db, 'artifacts', fb.appId, 'users', user.uid, 'saves');
-        const snap = await fb.firestore.getDocs(colRef);
-        setSaves(snap.docs.map(d => d.data()));
+        if (!user || !fb) return;
+        try {
+          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+          const colRef = fb.fns.collection(fb.db, 'artifacts', appId, 'users', user.uid, 'saves');
+          const snap = await fb.fns.getDocs(colRef);
+          const data = snap.docs.map(d => d.data());
+          data.sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+          setSaves(data);
+        } catch(e) { console.error(e); }
       };
 
-      // セーブ実行
       const executeSave = async () => {
-        if (!user) return;
-        const docRef = fb.firestore.doc(fb.db, 'artifacts', fb.appId, 'users', user.uid, 'saves', heroName || 'ゆうしゃ');
-        await fb.firestore.setDoc(docRef, { 
-          heroName, playerPos, clearedPrefs, updatedAt: new Date().toISOString() 
-        });
+        if (!user || !fb) return false;
+        try {
+          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+          const docRef = fb.fns.doc(fb.db, 'artifacts', appId, 'users', user.uid, 'saves', heroStats.name);
+          await fb.fns.setDoc(docRef, { heroStats, playerPos, clearedPrefs, updatedAt: new Date().toISOString() });
+          return true;
+        } catch(e) { console.error(e); return false; }
       };
 
-      const handleMove = (dx, dy) => {
-        if (gameState !== 'FIELD') return;
+      const handleMove = useCallback((dx, dy) => {
+        if (gameState !== 'FIELD' || menuOpen || msg !== "") return;
         setPlayerPos(prev => {
           const nx = prev.x + dx; const ny = prev.y + dy;
           if (ny < 0 || ny >= mapLayout.length || nx < 0 || nx >= mapLayout[0].length) return prev;
-          if (mapLayout[ny][nx] === '~') return prev;
-          
-          const prefId = prefRawData.find(p => p[2] === nx && p[3] === ny)?.[0];
-          if (prefId && !clearedPrefs.includes(prefId)) {
-            const p = prefRawData.find(x => x[0] === prefId);
-            setEncounterPref({ id: p[0], name: p[1] });
-            return prev;
-          }
+          if (mapLayout[ny][nx] === '~') return prev; 
           playSE('step');
+          const pref = prefecturesData.find(p => p.x === nx && p.y === ny);
+          if (pref && !clearedPrefs.includes(pref.id)) { stopBGM(); playSE('encounter'); setEncounterPref(pref); return prev; }
           return { x: nx, y: ny };
         });
-      };
+      }, [gameState, menuOpen, msg, clearedPrefs]);
 
-      if (!audioStarted) return (
-        <div className="fixed inset-0 flex items-center justify-center bg-black cursor-pointer z-50 text-white font-pressstart"
-             onClick={() => { initAudio(); setAudioStarted(true); playBGM('title'); }}>
-          <div className="animate-pulse">TAP TO START</div>
-        </div>
-      );
-
-      if (gameState === 'TITLE') return (
-        <TitleScreen 
-          onNewGame={() => setGameState('NAME_INPUT')} 
-          onLoadGame={async () => { await fetchSaves(); setGameState('LOAD_GAME'); }} 
-        />
-      );
-
-      if (gameState === 'NAME_INPUT') return (
-        <div className="w-screen h-screen flex items-center justify-center bg-black p-4 font-dotgothic text-white">
-          <div className="pixel-window p-8 flex flex-col gap-6 w-full max-w-md">
-            <p className="text-2xl">なまえを いれてください</p>
-            <input type="text" value={heroName} onChange={e => setHeroName(e.target.value)} maxLength={6}
-              className="bg-black text-white border-2 border-white p-3 text-3xl outline-none" />
-            <button onClick={() => { if(heroName){ setGameState('FIELD'); playBGM('field'); } }} className="text-xl self-end hover:text-yellow-400">けってい</button>
-          </div>
-        </div>
-      );
-
-      if (gameState === 'LOAD_GAME') return (
-        <div className="w-screen h-screen flex items-center justify-center bg-black p-4 font-dotgothic text-white">
-          <div className="pixel-window p-6 flex flex-col gap-4 w-full max-w-lg max-h-[80%] overflow-y-auto">
-            <p className="text-2xl mb-4 text-yellow-400">どの ぼうけんのしょ を ひらく？</p>
-            {saves.length === 0 ? <p>きろくが ありません</p> : 
-              saves.map((s, i) => (
-                <button key={i} onClick={() => { setHeroName(s.heroName); setPlayerPos(s.playerPos); setClearedPrefs(s.clearedPrefs); setGameState('FIELD'); playBGM('field'); }} 
-                  className="text-left border border-gray-600 p-4 hover:bg-white/10">
-                  ゆうしゃ：{s.heroName} (せいは:{s.clearedPrefs.length})
-                </button>
-              ))
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (gameState === 'FIELD' && encounterPref) {
+            if (e.key === 'Enter' || e.key === ' ') { setBattlePref(encounterPref); setEncounterPref(null); setGameState('BATTLE'); playBGM('battle'); }
+            else if (e.key === 'Escape') { playSE('cancel'); setEncounterPref(null); playBGM('field'); }
+          } else if (gameState === 'FIELD' && !encounterPref) {
+            if (msg !== "") {
+               if (e.key === 'Enter' || e.key === ' ') { playSE('cursor'); setMsg(""); if(savePhase===2)setSavePhase(0); }
+               return;
             }
-            <button onClick={() => setGameState('TITLE')} className="mt-4 text-right">もどる</button>
+            if (!menuOpen) {
+              if (e.key === 'ArrowUp') handleMove(0, -1);
+              else if (e.key === 'ArrowDown') handleMove(0, 1);
+              else if (e.key === 'ArrowLeft') handleMove(-1, 0);
+              else if (e.key === 'ArrowRight') handleMove(1, 0);
+              else if (e.key === 'Enter' || e.key === ' ') { playSE('decide'); setMenuOpen(true); setMenuCursor(0); }
+            } else {
+              if (e.key === 'Escape') { playSE('cancel'); setMenuOpen(false); }
+              else if (e.key === 'ArrowUp') { playSE('cursor'); setMenuCursor(c => c > 1 ? c - 2 : c); }
+              else if (e.key === 'ArrowDown') { playSE('cursor'); setMenuCursor(c => c < 4 ? c + 2 : c); }
+              else if (e.key === 'ArrowLeft') { playSE('cursor'); setMenuCursor(c => c % 2 === 1 ? c - 1 : c); }
+              else if (e.key === 'ArrowRight') { playSE('cursor'); setMenuCursor(c => c % 2 === 0 ? c + 1 : c); }
+              else if (e.key === 'Enter' || e.key === ' ') {
+                playSE('decide'); setMenuOpen(false);
+                if (menuCursor === 0) setMsg("だれも いないようだ。");
+                else if (menuCursor === 1) setMsg("しかし じゅもんが つかえない！");
+                else if (menuCursor === 2) setMsg(`${heroStats.name} の つよさ\nせいはしたち： ${clearedPrefs.length} / 47`);
+                else if (menuCursor === 3) setMsg("しかし なにも もっていない！");
+                else if (menuCursor === 4) setMsg("なにも みつからなかった。");
+                else if (menuCursor === 5) {
+                   if(!fb) setMsg("ふっかつのじゅもん が つかえない！");
+                   else { setMsg("ぼうけんのしょ に きろくした！"); executeSave(); setSavePhase(2); }
+                }
+              }
+            }
+          }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [gameState, encounterPref, handleMove, menuOpen, menuCursor, msg, fb, savePhase]);
+
+      // --- 描画 ---
+      if (gameState === 'START') {
+        return (
+          <div className="w-screen h-[100dvh] flex items-center justify-center bg-black cursor-pointer text-white"
+               onClick={() => { initAudio(); playBGM('title'); setGameState('TITLE'); }}>
+            <div className="text-2xl animate-blink tracking-widest font-bold">TAP TO START</div>
           </div>
-        </div>
-      );
+        );
+      }
 
       return (
-        <div className="w-screen h-screen bg-black font-dotgothic overflow-hidden relative">
-          {/* フィールド表示 */}
-          <div className="absolute inset-0 bg-[#1e3a8a]">
-            <div className="absolute left-1/2 top-1/2 transition-transform duration-200"
-                 style={{ transform: `translate(calc(-50% - ${playerPos.x * TILE_SIZE}px), calc(-50% - ${playerPos.y * TILE_SIZE}px))` }}>
-              {mapLayout.map((row, y) => row.split('').map((tile, x) => (
-                <div key={`${x}-${y}`} className={`absolute border border-black/5 ${tile==='~'?'bg-blue-600':tile==='^'?'bg-gray-400':'bg-green-500'}`} 
-                     style={{ left: x*TILE_SIZE, top: y*TILE_SIZE, width: TILE_SIZE, height: TILE_SIZE }}>
-                  {prefRawData.some(p => p[2]===x && p[3]===y) && <div className="text-center">🏰</div>}
-                </div>
-              )))}
-              <div className="absolute text-2xl animate-bounce" style={{ left: playerPos.x*TILE_SIZE, top: playerPos.y*TILE_SIZE }}>🚶</div>
-            </div>
-          </div>
-
-          {/* 操作ボタン */}
-          <div className="absolute bottom-8 left-8 flex flex-col gap-2 opacity-80">
-            <button className="pixel-window w-14 h-14" onClick={() => handleMove(0,-1)}>▲</button>
-            <div className="flex gap-2">
-              <button className="pixel-window w-14 h-14" onClick={() => handleMove(-1,0)}>◀</button>
-              <button className="pixel-window w-14 h-14" onClick={() => handleMove(1,0)}>▶</button>
-            </div>
-            <button className="pixel-window w-14 h-14" onClick={() => handleMove(0,1)}>▼</button>
-          </div>
-
-          <div className="absolute bottom-8 right-8 flex gap-4 opacity-80">
-            <button className="pixel-window w-16 h-16 rounded-full text-2xl" onClick={() => setSavePhase(1)}>書</button>
-            <button className="pixel-window w-16 h-16 rounded-full text-2xl" onClick={() => playSE('cancel')}>Ｂ</button>
-          </div>
-
-          {/* セーブダイアログ */}
-          {savePhase === 1 && (
-            <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4 z-50 text-white">
-              <div className="pixel-window p-6 w-full max-w-sm">
-                <p className="text-xl mb-6">ぼうけんのしょ に きろくしますか？</p>
-                <div className="flex justify-around">
-                  <button onClick={async () => { setSavePhase(2); await executeSave(); setSavePhase(3); playSE('correct'); }} className="hover:text-yellow-400">はい</button>
-                  <button onClick={() => setSavePhase(0)} className="hover:text-yellow-400">いいえ</button>
+        <div className="w-screen h-[100dvh] flex flex-col bg-black text-white select-none items-center overflow-hidden">
+          
+          <div className="w-full max-w-2xl flex-1 relative overflow-hidden bg-black border-x-4 border-gray-900 flex flex-col min-h-0">
+            {gameState === 'TITLE' && <TitleScreen onNewGame={() => setGameState('NAME_INPUT')} onLoadGame={async () => { await fetchSaves(); setGameState('LOAD_GAME'); }} />}
+            
+            {gameState === 'NAME_INPUT' && (
+              <div className="w-full h-full flex items-center justify-center p-4">
+                <div className="dq-window p-8 flex flex-col gap-6 w-full max-w-sm">
+                  <p className="text-xl sm:text-2xl">なまえを いれてください</p>
+                  <input type="text" value={heroStats.name} onChange={e => setHeroStats({...heroStats, name: e.target.value.substring(0,4)})} autoFocus
+                    className="bg-black text-white border-2 border-white p-2 text-2xl outline-none uppercase" />
+                  <div className="flex justify-end gap-6 text-xl">
+                    <button onClick={() => { if(heroStats.name){ playSE('decide'); setPlayerPos({x:61,y:16}); setClearedPrefs([]); playBGM('field'); setGameState('FIELD'); } }} className="hover:text-yellow-400 border border-white px-4 py-2">おわる</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          {savePhase === 2 && <div className="absolute inset-0 bg-black flex items-center justify-center z-50 text-white">きろくちゅう...</div>}
-          {savePhase === 3 && (
-            <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4 z-50 text-white" onClick={() => setSavePhase(0)}>
-              <div className="pixel-window p-6 text-center">きろくが おわりました。 ▼</div>
-            </div>
-          )}
+            )}
 
-          {/* エンカウント */}
-          {encounterPref && (
-            <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-4 z-50 text-white">
-              <div className="pixel-window p-6 text-center">
-                <p className="text-2xl mb-4">{encounterPref.name} に ついた！</p>
-                <p className="mb-6">クイズに ちょうせんする？</p>
-                <div className="flex justify-around">
-                  <button onClick={() => { setEncounterPref(null); setClearedPrefs(prev => [...prev, encounterPref.id]); playSE('win'); }} className="hover:text-yellow-400">はい</button>
-                  <button onClick={() => setEncounterPref(null)} className="hover:text-yellow-400">いいえ</button>
+            {gameState === 'LOAD_GAME' && (
+              <div className="w-full h-full flex items-center justify-center p-4">
+                <div className="dq-window p-6 flex flex-col gap-4 w-full max-w-md max-h-[80%] overflow-y-auto">
+                  <p className="text-xl sm:text-2xl mb-4 text-yellow-400">どの ぼうけんのしょ から はじめる？</p>
+                  {saves.length === 0 ? <p className="text-gray-400 text-xl">きろく が ありません</p> : (
+                    saves.map((s, i) => (
+                      <button key={i} onClick={() => { playSE('decide'); setHeroStats(s.heroStats); setPlayerPos(s.playerPos); setClearedPrefs(s.clearedPrefs || []); playBGM('field'); setGameState('FIELD'); }} className="text-left hover:text-yellow-400 mb-2 text-lg sm:text-xl border-b border-gray-600 pb-2">
+                        {s.heroStats.name} (LV {s.heroStats.level}) - {s.clearedPrefs.length}/47
+                      </button>
+                    ))
+                  )}
+                  <div className="mt-4 flex justify-end">
+                    <button onClick={() => { playSE('cancel'); setGameState('TITLE'); }} className="text-xl hover:text-yellow-400 border border-white px-4 py-2">もどる</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {(gameState === 'FIELD' || gameState === 'BATTLE' || gameState === 'GAMECLEAR') && (
+              <div className="flex-1 w-full h-full relative min-h-0">
+                <div className="absolute top-2 left-2 sm:top-4 sm:left-4 dq-window p-2 sm:p-4 z-50 text-xs sm:text-base leading-relaxed tracking-widest min-w-[100px] opacity-90">
+                  {heroStats.name}<br/>
+                  ＬＶ　{heroStats.level.toString().padStart(3, ' ')}<br/>
+                  ＨＰ　{heroStats.hp.toString().padStart(3, ' ')}<br/>
+                  Ｇ　　{heroStats.gold.toString().padStart(3, ' ')}<br/>
+                  Ｅ　　{heroStats.exp.toString().padStart(3, ' ')}
+                </div>
+
+                {gameState === 'FIELD' && (
+                  <div className="w-full h-full relative overflow-hidden bg-[#0040A0]">
+                    <div className="absolute left-1/2 top-1/2 transition-transform duration-200"
+                         style={{ transform: `translate(calc(-50% - ${playerPos.x * TILE_SIZE}px), calc(-50% - ${playerPos.y * TILE_SIZE}px))` }}>
+                      {mapLayout.map((row, y) => row.split('').map((tile, x) => {
+                        const bg = TileMap[tile].bg; const iconName = TileMap[tile].icon;
+                        const pref = prefecturesData.find(p => p.x === x && p.y === y);
+                        return (
+                          <div key={`${x}-${y}`} className="absolute flex items-center justify-center border-t border-l border-black/10" style={{ left: x * TILE_SIZE, top: y * TILE_SIZE, width: TILE_SIZE, height: TILE_SIZE, backgroundColor: bg }}>
+                            {iconName && <PixelArt name={iconName} size={30} />}
+                            {pref && <PixelArt name="castle" size={32} />}
+                            {pref && clearedPrefs.includes(pref.id) && <div className="absolute -top-1 right-0 text-sm text-yellow-300 font-bold drop-shadow-md">★</div>}
+                          </div>
+                        );
+                      }))}
+                      <div className="absolute flex items-center justify-center z-10" style={{ left: playerPos.x * TILE_SIZE, top: playerPos.y * TILE_SIZE, width: TILE_SIZE, height: TILE_SIZE }}>
+                        <PixelArt name="hero" size={28} className="animate-pulse" />
+                      </div>
+                    </div>
+
+                    {menuOpen && (
+                      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-40">
+                        <div className="dq-window p-3 sm:p-4 flex flex-col text-sm sm:text-lg leading-loose w-[160px] sm:w-[220px]">
+                          <div className="grid grid-cols-2 gap-x-1 gap-y-2">
+                            <div>{menuCursor===0&&<span className="text-yellow-400">▶</span>}はなす</div>   <div>{menuCursor===1&&<span className="text-yellow-400">▶</span>}じゅもん</div>
+                            <div>{menuCursor===2&&<span className="text-yellow-400">▶</span>}つよさ</div>   <div>{menuCursor===3&&<span className="text-yellow-400">▶</span>}どうぐ</div>
+                            <div>{menuCursor===4&&<span className="text-yellow-400">▶</span>}しらべる</div> <div>{menuCursor===5&&<span className="text-yellow-400">▶</span>}セーブ</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {encounterPref && (
+                      <div className="absolute inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
+                        <div className="dq-window p-6 text-center text-sm sm:text-lg leading-relaxed max-w-sm w-full">
+                          あ！ {encounterPref.name} だ！<br/>クイズに ちょうせんする？<br/><br/>
+                          <span className="text-yellow-400 text-xs sm:text-sm mt-4 inline-block">※Aで「はい」、Bで「いいえ」</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {(msg !== "" && !encounterPref) && (
+                      <div className="absolute bottom-2 left-2 right-2 sm:bottom-4 sm:left-4 sm:right-4 z-40">
+                        <div className="dq-window p-3 sm:p-4 text-sm sm:text-lg leading-relaxed relative min-h-[80px] overflow-y-auto">
+                          <TypewriterMessage text={msg} />
+                          <div className="absolute bottom-2 right-4 animate-blink text-yellow-400">▼</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {gameState === 'BATTLE' && battlePref && (
+                  <BattleScreen 
+                    pref={battlePref} heroStats={heroStats} setHeroStats={setHeroStats}
+                    onWin={(id) => {
+                      const newC = [...clearedPrefs, id]; setClearedPrefs(newC); setBattlePref(null);
+                      if(newC.length >= 47){ stopBGM(); playSE('clear'); setGameState('GAMECLEAR'); } 
+                      else { setGameState('FIELD'); playBGM('field'); }
+                    }}
+                    onEscape={() => { setBattlePref(null); setGameState('FIELD'); playBGM('field'); }}
+                  />
+                )}
+
+                {gameState === 'GAMECLEAR' && (
+                  <div className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 space-y-8">
+                    <h1 className="text-3xl sm:text-5xl text-yellow-400 font-bold tracking-widest animate-blink text-center leading-tight">JAPAN QUEST<br/>ALL CLEARED!</h1>
+                    <div className="dq-window p-6 text-sm sm:text-lg leading-loose text-center">
+                      ゆうしゃ {heroStats.name} は<br/>４７とどうふけん の<br/>すべての ちしき を えた！<br/><br/>そして でんせつ が はじまった...
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="w-full max-w-2xl shrink-0">
+             <VirtualController />
+          </div>
+          
         </div>
       );
     }
@@ -529,4 +876,3 @@
   </script>
 </body>
 </html>
-
