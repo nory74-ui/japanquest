@@ -35,13 +35,22 @@
     
     ::-webkit-scrollbar { width: 4px; background: transparent; }
     ::-webkit-scrollbar-thumb { background: white; border-radius: 4px; }
-
-    /* 文字のはみ出し防止 */
-    .word-break-all {
-      word-break: break-word;
-      overflow-wrap: break-word;
-    }
+    .word-break-all { word-break: break-word; overflow-wrap: break-word; }
   </style>
+
+  <!-- Babelの変換エラーを避けるため、FirebaseはModuleとして別スクリプトで読み込む -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+    import { getFirestore, doc, setDoc, getDocs, collection } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+    window.__FirebaseLibs = {
+      initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged,
+      getFirestore, doc, setDoc, getDocs, collection
+    };
+    // 読み込み完了をReact側に通知
+    window.dispatchEvent(new Event('firebaseLibsLoaded'));
+  </script>
 </head>
 <body>
   <div id="root"></div>
@@ -227,7 +236,7 @@
       [6, '山形県', 63, 11, [['県庁所在地は？','山形市','鶴岡市','酒田市','米沢市'],['生産量日本一の果物は？','さくらんぼ','りんご','もも','ぶどう'],['樹氷で有名な温泉地・スキー場は？','蔵王','草津','白馬','ニセコ'],['県内を流れる「五月雨を…」で詠まれた川は？','最上川','信濃川','阿賀野川','利根川'],['生産量日本一を誇るボードゲームの道具は？','将棋駒','囲碁石','麻雀牌','花札'],['花笠を手に踊る夏のお祭りは？','花笠まつり','さんさ踊り','よさこい','阿波おどり']]],
       [7, '福島県', 63, 12, [['県庁所在地は？','福島市','郡山市','いわき市','会津若松市'],['日本で4番目に広い湖は？','猪苗代湖','琵琶湖','霞ヶ浦','サロマ湖'],['日本三大ラーメンの一つとされるのは？','喜多方ラーメン','博多ラーメン','札幌ラーメン','和歌山ラーメン'],['黄熱病の研究で知られる福島出身の偉人は？','野口英世','北里柴三郎','福沢諭吉','渋沢栄一'],['白虎隊で有名な会津若松のお城は？','鶴ヶ城','青葉城','弘前城','白石城'],['首が揺れる赤い牛の郷土玩具は？','赤べこ','起き上がり小法師','こけし','だるま']]],
       [8, '茨城県', 64, 14, [['県庁所在地は？','水戸市','つくば市','日立市','土浦市'],['名物として知られる大豆の発酵食品は？','納豆','味噌','醤油','豆腐'],['日本三名園の一つである水戸の庭園は？','偕楽園','兼六園','後楽園','栗林公園'],['日本で2番目に広い湖は？','霞ヶ浦','琵琶湖','サロマ湖','猪苗代湖'],['宇宙航空研究開発機構(JAXA)がある市は？','つくば市','水戸市','日立市','鹿嶋市'],['ギネス記録を持つ青銅製の巨大仏像は？','牛久大仏','鎌倉大仏','奈良の大仏','高岡大仏']]],
-      [9, '栃木県', 62, 14, [['県庁所在地は？','宇都宮市','小山市','栃木市','足利市'],['徳川家康を祀る世界遺産の神社は？','日光東照宮','明治神宮','伊勢神宮','出雲大社'],['「とちおとめ」で知られる生産量日本一の果物は？','いちご','もも','ぶどう','メロン'],['宇都宮市が消費量日本一を争う食べ物は？','餃子','うどん','ラーメン','カレー'],['日本三大名瀑の一つである滝は？','華厳の滝','那智の滝','袋田の滝','白糸の滝'],['かつて公害事件が起きた有名な銅山は？','足尾銅山','別子銅山','生野銀山','石見銀山']]],
+      [9, '栃木県', 62, 14, [['県庁所在地は？','宇都宮市','小山市','栃木市','足利市'],['徳川家康を祀る世界遺産の神社は？','日光東照宮','明治神宮','伊勢神宮','出雲大社'],['「とちおとめ」で知られる生産量日本一の果物は？','いちご','もも','ぶどう','メロン'],['宇歩宮市が消費量日本一を争う食べ物は？','餃子','うどん','ラーメン','カレー'],['日本三大名瀑の一つである滝は？','華厳の滝','那智の滝','袋田の滝','白糸の滝'],['かつて公害事件が起きた有名な銅山は？','足尾銅山','別子銅山','生野銀山','石見銀山']]],
       [10, '群馬県', 61, 14, [['県庁所在地は？','前橋市','高崎市','太田市','伊勢崎市'],['湯畑で有名な日本三名泉の一つは？','草津温泉','有馬温泉','下呂温泉','別府温泉'],['生産量日本一のイモ類加工食品は？','こんにゃく','ところてん','寒天','しらたき'],['世界遺産に登録された明治時代の絹糸工場は？','富岡製糸場','八幡製鉄所','長崎造船所','三池炭鉱'],['高崎市が生産量日本一を誇る縁起物は？','だるま','招き猫','赤べこ','こけし'],['嬬恋村で栽培が盛んな高原野菜は？','キャベツ','レタス','白菜','大根']]],
       [11, '埼玉県', 61, 15, [['県庁所在地は？','さいたま市','川口市','川越市','所沢市'],['名物の硬いおせんべいといえば？','草加せんべい','ぬれせんべい','南部せんべい','瓦せんべい'],['日本三大曳山祭に数えられるお祭りは？','秩父夜祭','祇園祭','高山祭','ねぶた祭'],['深谷市が生産量日本一を誇る野菜は？','ねぎ','たまねぎ','にんじん','じゃがいも'],['さいたま市にある交通系の巨大博物館は？','鉄道博物館','リニア・鉄道館','京都鉄道博物館','地下鉄博物館'],['新1万円札の顔となった深谷市出身の人物は？','渋沢栄一','福沢諭吉','津田梅子','北里柴三郎']]],
       [12, '千葉県', 63, 16, [['県庁所在地は？','千葉市','船橋市','松戸市','市川市'],['生産量日本一の豆類といえば？','落花生','大豆','小豆','そら豆'],['日本の玄関口である国際空港は？','成田国際空港','羽田空港','関西国際空港','中部国際空港'],['太平洋に面した約66kmの砂浜海岸は？','九十九里浜','湘南海岸','鳥取砂丘','千里浜'],['千葉県の大部分を占める半島は？','房総半島','三浦半島','伊豆半島','紀伊半島'],['浦安市にある有名なテーマパークは？','ディズニーリゾート','USJ','ハウステンボス','富士急ハイランド']]],
@@ -326,86 +335,8 @@
     };
 
     // ==========================================
-    // 4. UIコンポーネント
+    // 4. UIコンポーネント (テキスト描画等)
     // ==========================================
-
-    // ★ドラクエ風 アーチ状タイトルロゴ (完全に一つのかたまりとして描画)
-    function DqTitleLogo() {
-      return (
-        <svg viewBox="0 0 800 360" className="w-full h-full max-w-2xl mx-auto drop-shadow-[0_15px_25px_rgba(0,0,0,0.9)]" style={{ maxHeight: '100%' }}>
-          <defs>
-            <linearGradient id="dqGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#ffea00"/>
-              <stop offset="50%" stopColor="#ff5500"/>
-              <stop offset="100%" stopColor="#ff0000"/>
-            </linearGradient>
-            
-            {/* 一体感のある極厚の二重縁取りフィルター */}
-            <filter id="outline">
-              <feMorphology in="SourceAlpha" result="DILATED" operator="dilate" radius="6"></feMorphology>
-              <feFlood floodColor="#000" in="DILATED" result="BLACK"></feFlood>
-              <feComposite in="BLACK" in2="DILATED" operator="in" result="OUTLINE_B"></feComposite>
-
-              <feMorphology in="SourceAlpha" result="DILATED2" operator="dilate" radius="3"></feMorphology>
-              <feFlood floodColor="#fff" in="DILATED2" result="WHITE"></feFlood>
-              <feComposite in="WHITE" in2="DILATED2" operator="in" result="OUTLINE_W"></feComposite>
-
-              <feMerge>
-                <feMergeNode in="OUTLINE_B" />
-                <feMergeNode in="OUTLINE_W" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* 全てを filter の中に入れて一つのかたまりにする */}
-          <g filter="url(#outline)">
-            
-            {/* --- テキストグループ --- */}
-            <g fontFamily="'DotGothic16', monospace" fontSize="85" fontWeight="bold" textAnchor="middle" fill="url(#dqGrad)">
-              
-              {/* JAPAN (上段) */}
-              <g transform="translate(140, 130) scale(1.3, 2.2) skewY(15)">
-                <text dominantBaseline="central">J</text>
-                {/* Jに横たわる日本列島のシルエット */}
-                <g transform="translate(-10, 0) scale(0.3) rotate(35)" fill="#1a1a1a">
-                  <polygon points="50,10 70,5 90,15 110,15 120,30 90,40 70,45 50,30 40,20" />
-                  <polygon points="40,50 30,70 0,100 -30,110 -60,130 -80,140 -85,150 -60,150 -30,130 10,120 40,110 50,80 60,60" />
-                  <polygon points="-40,145 -15,150 -20,165 -45,155" />
-                  <polygon points="-65,160 -45,165 -40,185 -50,200 -70,180" />
-                </g>
-              </g>
-              <text transform="translate(260, 130) scale(1.3, 1.5) skewY(8)" dominantBaseline="central">A</text>
-              <text transform="translate(380, 130) scale(1.3, 1.0) skewY(0)" dominantBaseline="central">P</text>
-              <text transform="translate(500, 130) scale(1.3, 1.5) skewY(-8)" dominantBaseline="central">A</text>
-              <text transform="translate(620, 130) scale(1.3, 2.2) skewY(-15)" dominantBaseline="central">N</text>
-
-              {/* QUES (下段) */}
-              <text transform="translate(160, 240) scale(1.3, 2.2) skewY(-15)" dominantBaseline="central">Q</text>
-              <text transform="translate(280, 240) scale(1.3, 1.5) skewY(-8)" dominantBaseline="central">U</text>
-              <text transform="translate(400, 240) scale(1.3, 1.0) skewY(0)" dominantBaseline="central">E</text>
-              <text transform="translate(520, 240) scale(1.3, 1.5) skewY(8)" dominantBaseline="central">S</text>
-            </g>
-
-            {/* --- Tの代わりの剣 --- */}
-            {/* 剣全体にも同じパース(skewとscale)をかけてTの文字として馴染ませる */}
-            <g transform="translate(640, 240) scale(1.3, 2.2) skewY(15)">
-              <polygon points="-8,-40 0,-60 8,-40 5,20 -5,20" fill="#e0e0e0" />
-              <polygon points="0,-60 8,-40 5,20 0,20" fill="#ffffff" />
-              {/* 鍔 */}
-              <polygon points="-35,15 35,15 30,25 -30,25" fill="#3b82f6" />
-              <circle cx="0" cy="20" r="8" fill="#ef4444" />
-              {/* 柄 */}
-              <rect x="-6" y="25" width="12" height="25" fill="#b91c1c" />
-              {/* 柄頭 */}
-              <circle cx="0" cy="52" r="8" fill="#fbbf24" />
-            </g>
-
-          </g>
-        </svg>
-      );
-    }
-
     function TypewriterMessage({ text, onComplete }) {
       const [disp, setDisp] = useState("");
       const onCompleteRef = useRef(onComplete);
@@ -482,10 +413,30 @@
 
       return (
         <div className="w-full h-full flex flex-col items-center justify-center bg-[#2b4c7e] relative p-4 min-h-0 overflow-hidden">
-          <div className="w-full flex-1 flex items-center justify-center min-h-0 mb-4 sm:mb-8">
-            <DqTitleLogo />
+          
+          <div className="w-full flex-1 flex flex-col items-center justify-center min-h-0 mb-4 sm:mb-8 relative">
+            {/* ユーザーアップロード画像を表示 */}
+            <img 
+              src="image.png" 
+              alt="JAPAN QUEST Logo" 
+              className="w-full max-w-2xl mx-auto drop-shadow-2xl object-contain z-10"
+              style={{ maxHeight: '100%' }}
+              onError={(e) => {
+                e.target.style.display = 'none';
+                document.getElementById('fallback-logo').style.display = 'flex';
+              }}
+            />
+            {/* 画像がない場合のフォールバックメッセージ */}
+            <div id="fallback-logo" className="absolute inset-0 flex-col items-center justify-center hidden z-0">
+              <h1 className="text-4xl sm:text-6xl font-bold tracking-widest text-yellow-400" style={{fontFamily: "'DotGothic16', monospace"}}>JAPAN QUEST</h1>
+              <div className="mt-8 text-center text-white bg-black/70 p-4 border border-white">
+                <p>※タイトル画像が見つかりません。</p>
+                <p>このHTMLファイルと同じフォルダに<br/>アップロードした画像を<br/><b>「image.png」</b>という名前で<br/>保存してください。</p>
+              </div>
+            </div>
           </div>
-          <div className="dq-window px-8 py-6 sm:px-12 sm:py-8 flex flex-col gap-4 sm:gap-6 text-lg sm:text-2xl shrink-0 shadow-2xl mb-2 sm:mb-4">
+
+          <div className="dq-window px-8 py-6 sm:px-12 sm:py-8 flex flex-col gap-4 sm:gap-6 text-lg sm:text-2xl shrink-0 shadow-2xl mb-2 sm:mb-4 z-20">
             <div className="relative cursor-pointer" onPointerDown={() => { setCursor(0); playSE('decide'); onNewGame(); }}>
               <span className="absolute -left-6 sm:-left-8 text-yellow-400">{cursor === 0 ? '▶' : '　'}</span>さいしょから
             </div>
@@ -637,10 +588,9 @@
       useEffect(() => {
         const initFb = async () => {
           try {
-            const appModule = await new Function("return import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js')")();
-            const authModule = await new Function("return import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js')")();
-            const fsModule = await new Function("return import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js')")();
-            const fns = { ...appModule, ...authModule, ...fsModule };
+            const appModule = await window.__FirebaseLibs;
+            if(!appModule) return;
+            const fns = window.__FirebaseLibs;
             const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
             if (config) {
               const app = fns.initializeApp(config); const auth = fns.getAuth(app); const db = fns.getFirestore(app);
@@ -651,7 +601,10 @@
             }
           } catch (e) { console.error("Firebase init err:", e); }
         };
-        initFb();
+        
+        if(window.__FirebaseLibs) initFb();
+        else window.addEventListener('firebaseLibsLoaded', initFb);
+        return () => window.removeEventListener('firebaseLibsLoaded', initFb);
       }, []);
 
       const fetchSaves = async () => {
