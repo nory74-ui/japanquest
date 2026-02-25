@@ -37,20 +37,6 @@
     ::-webkit-scrollbar-thumb { background: white; border-radius: 4px; }
     .word-break-all { word-break: break-word; overflow-wrap: break-word; }
   </style>
-
-  <!-- Babelの変換エラーを避けるため、FirebaseはModuleとして別スクリプトで読み込む -->
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-    import { getFirestore, doc, setDoc, getDocs, collection } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-
-    window.__FirebaseLibs = {
-      initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged,
-      getFirestore, doc, setDoc, getDocs, collection
-    };
-    // 読み込み完了をReact側に通知
-    window.dispatchEvent(new Event('firebaseLibsLoaded'));
-  </script>
 </head>
 <body>
   <div id="root"></div>
@@ -236,7 +222,7 @@
       [6, '山形県', 63, 11, [['県庁所在地は？','山形市','鶴岡市','酒田市','米沢市'],['生産量日本一の果物は？','さくらんぼ','りんご','もも','ぶどう'],['樹氷で有名な温泉地・スキー場は？','蔵王','草津','白馬','ニセコ'],['県内を流れる「五月雨を…」で詠まれた川は？','最上川','信濃川','阿賀野川','利根川'],['生産量日本一を誇るボードゲームの道具は？','将棋駒','囲碁石','麻雀牌','花札'],['花笠を手に踊る夏のお祭りは？','花笠まつり','さんさ踊り','よさこい','阿波おどり']]],
       [7, '福島県', 63, 12, [['県庁所在地は？','福島市','郡山市','いわき市','会津若松市'],['日本で4番目に広い湖は？','猪苗代湖','琵琶湖','霞ヶ浦','サロマ湖'],['日本三大ラーメンの一つとされるのは？','喜多方ラーメン','博多ラーメン','札幌ラーメン','和歌山ラーメン'],['黄熱病の研究で知られる福島出身の偉人は？','野口英世','北里柴三郎','福沢諭吉','渋沢栄一'],['白虎隊で有名な会津若松のお城は？','鶴ヶ城','青葉城','弘前城','白石城'],['首が揺れる赤い牛の郷土玩具は？','赤べこ','起き上がり小法師','こけし','だるま']]],
       [8, '茨城県', 64, 14, [['県庁所在地は？','水戸市','つくば市','日立市','土浦市'],['名物として知られる大豆の発酵食品は？','納豆','味噌','醤油','豆腐'],['日本三名園の一つである水戸の庭園は？','偕楽園','兼六園','後楽園','栗林公園'],['日本で2番目に広い湖は？','霞ヶ浦','琵琶湖','サロマ湖','猪苗代湖'],['宇宙航空研究開発機構(JAXA)がある市は？','つくば市','水戸市','日立市','鹿嶋市'],['ギネス記録を持つ青銅製の巨大仏像は？','牛久大仏','鎌倉大仏','奈良の大仏','高岡大仏']]],
-      [9, '栃木県', 62, 14, [['県庁所在地は？','宇都宮市','小山市','栃木市','足利市'],['徳川家康を祀る世界遺産の神社は？','日光東照宮','明治神宮','伊勢神宮','出雲大社'],['「とちおとめ」で知られる生産量日本一の果物は？','いちご','もも','ぶどう','メロン'],['宇歩宮市が消費量日本一を争う食べ物は？','餃子','うどん','ラーメン','カレー'],['日本三大名瀑の一つである滝は？','華厳の滝','那智の滝','袋田の滝','白糸の滝'],['かつて公害事件が起きた有名な銅山は？','足尾銅山','別子銅山','生野銀山','石見銀山']]],
+      [9, '栃木県', 62, 14, [['県庁所在地は？','宇都宮市','小山市','栃木市','足利市'],['徳川家康を祀る世界遺産の神社は？','日光東照宮','明治神宮','伊勢神宮','出雲大社'],['「とちおとめ」で知られる生産量日本一の果物は？','いちご','もも','ぶどう','メロン'],['宇都宮市が消費量日本一を争う食べ物は？','餃子','うどん','ラーメン','カレー'],['日本三大名瀑の一つである滝は？','華厳の滝','那智の滝','袋田の滝','白糸の滝'],['かつて公害事件が起きた有名な銅山は？','足尾銅山','別子銅山','生野銀山','石見銀山']]],
       [10, '群馬県', 61, 14, [['県庁所在地は？','前橋市','高崎市','太田市','伊勢崎市'],['湯畑で有名な日本三名泉の一つは？','草津温泉','有馬温泉','下呂温泉','別府温泉'],['生産量日本一のイモ類加工食品は？','こんにゃく','ところてん','寒天','しらたき'],['世界遺産に登録された明治時代の絹糸工場は？','富岡製糸場','八幡製鉄所','長崎造船所','三池炭鉱'],['高崎市が生産量日本一を誇る縁起物は？','だるま','招き猫','赤べこ','こけし'],['嬬恋村で栽培が盛んな高原野菜は？','キャベツ','レタス','白菜','大根']]],
       [11, '埼玉県', 61, 15, [['県庁所在地は？','さいたま市','川口市','川越市','所沢市'],['名物の硬いおせんべいといえば？','草加せんべい','ぬれせんべい','南部せんべい','瓦せんべい'],['日本三大曳山祭に数えられるお祭りは？','秩父夜祭','祇園祭','高山祭','ねぶた祭'],['深谷市が生産量日本一を誇る野菜は？','ねぎ','たまねぎ','にんじん','じゃがいも'],['さいたま市にある交通系の巨大博物館は？','鉄道博物館','リニア・鉄道館','京都鉄道博物館','地下鉄博物館'],['新1万円札の顔となった深谷市出身の人物は？','渋沢栄一','福沢諭吉','津田梅子','北里柴三郎']]],
       [12, '千葉県', 63, 16, [['県庁所在地は？','千葉市','船橋市','松戸市','市川市'],['生産量日本一の豆類といえば？','落花生','大豆','小豆','そら豆'],['日本の玄関口である国際空港は？','成田国際空港','羽田空港','関西国際空港','中部国際空港'],['太平洋に面した約66kmの砂浜海岸は？','九十九里浜','湘南海岸','鳥取砂丘','千里浜'],['千葉県の大部分を占める半島は？','房総半島','三浦半島','伊豆半島','紀伊半島'],['浦安市にある有名なテーマパークは？','ディズニーリゾート','USJ','ハウステンボス','富士急ハイランド']]],
@@ -569,8 +555,6 @@
     // ==========================================
     function App() {
       const [gameState, setGameState] = useState('START'); 
-      const [fb, setFb] = useState(null);
-      const [user, setUser] = useState(null);
       
       const [heroStats, setHeroStats] = useState({ name: "", level: 1, hp: 15, maxHp: 15, exp: 0, gold: 0 });
       const [playerPos, setPlayerPos] = useState({ x: 61, y: 16 });
@@ -585,48 +569,47 @@
       const [msg, setMsg] = useState("");
       const [savePhase, setSavePhase] = useState(0);
 
-      useEffect(() => {
-        const initFb = async () => {
-          try {
-            const appModule = await window.__FirebaseLibs;
-            if(!appModule) return;
-            const fns = window.__FirebaseLibs;
-            const config = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-            if (config) {
-              const app = fns.initializeApp(config); const auth = fns.getAuth(app); const db = fns.getFirestore(app);
-              setFb({ auth, db, fns });
-              if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await fns.signInWithCustomToken(auth, __initial_auth_token);
-              else await fns.signInAnonymously(auth);
-              fns.onAuthStateChanged(auth, setUser);
-            }
-          } catch (e) { console.error("Firebase init err:", e); }
-        };
-        
-        if(window.__FirebaseLibs) initFb();
-        else window.addEventListener('firebaseLibsLoaded', initFb);
-        return () => window.removeEventListener('firebaseLibsLoaded', initFb);
-      }, []);
-
       const fetchSaves = async () => {
-        if (!user || !fb) return;
         try {
-          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-          const colRef = fb.fns.collection(fb.db, 'artifacts', appId, 'users', user.uid, 'saves');
-          const snap = await fb.fns.getDocs(colRef);
-          const data = snap.docs.map(d => d.data());
-          data.sort((a,b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-          setSaves(data);
-        } catch(e) { console.error(e); }
+          const savesStr = localStorage.getItem('japan_quest_saves');
+          if (savesStr) {
+            const data = JSON.parse(savesStr);
+            data.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+            setSaves(data);
+          } else {
+            setSaves([]);
+          }
+        } catch (e) {
+          console.error("Save data load error:", e);
+          setSaves([]);
+        }
       };
 
       const executeSave = async () => {
-        if (!user || !fb) return false;
         try {
-          const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-          const docRef = fb.fns.doc(fb.db, 'artifacts', appId, 'users', user.uid, 'saves', heroStats.name);
-          await fb.fns.setDoc(docRef, { heroStats, playerPos, clearedPrefs, updatedAt: new Date().toISOString() });
+          const savesStr = localStorage.getItem('japan_quest_saves');
+          let data = savesStr ? JSON.parse(savesStr) : [];
+          const existingIndex = data.findIndex(s => s.heroStats.name === heroStats.name);
+          
+          const newSaveData = {
+            heroStats,
+            playerPos,
+            clearedPrefs,
+            updatedAt: new Date().toISOString()
+          };
+
+          if (existingIndex >= 0) {
+            data[existingIndex] = newSaveData;
+          } else {
+            data.push(newSaveData);
+          }
+          
+          localStorage.setItem('japan_quest_saves', JSON.stringify(data));
           return true;
-        } catch(e) { console.error(e); return false; }
+        } catch (e) {
+          console.error("Save data write error:", e);
+          return false;
+        }
       };
 
       const handleMove = useCallback((dx, dy) => {
@@ -672,8 +655,7 @@
                 else if (menuCursor === 3) setMsg("しかし なにも もっていない！");
                 else if (menuCursor === 4) setMsg("なにも みつからなかった。");
                 else if (menuCursor === 5) {
-                   if(!fb) setMsg("ふっかつのじゅもん が つかえない！");
-                   else { setMsg("ぼうけんのしょ に きろくした！"); executeSave(); setSavePhase(2); }
+                   setMsg("ぼうけんのしょ に きろくした！"); executeSave(); setSavePhase(2); 
                 }
               }
             }
@@ -681,7 +663,7 @@
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-      }, [gameState, encounterPref, handleMove, menuOpen, menuCursor, msg, fb, savePhase]);
+      }, [gameState, encounterPref, handleMove, menuOpen, menuCursor, msg, savePhase]);
 
       // --- 描画 ---
       if (gameState === 'START') {
